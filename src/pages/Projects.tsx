@@ -7,19 +7,28 @@ import { STATUS_LABELS } from '../lib/types';
 import Layout from '../components/Layout';
 import { FolderOpen, Folder } from 'lucide-react';
 import { useParams } from 'next/navigation';
-import type React from 'react';
+import React from 'react';
 
 const FOLDER_META: Record<string, { title: string; icon: React.ReactNode; desc: string }> = {
-  demandas: { title: '1. Demandas', icon: <FolderOpen size={16} />, desc: 'Demandas recebidas e em triagem' },
-  aprovacao: { title: '2. Projetos em Aprovação', icon: <FolderOpen size={16} />, desc: 'Projetos aguardando aprovação para início' },
-  implantados: { title: '4. Projetos Implantados', icon: <Folder size={16} />, desc: 'Projetos já implantados em produção' },
+  'gestao-de-fluxos': { title: 'Gestão de Fluxos', icon: <FolderOpen size={16} />, desc: 'Demandas recebidas e em triagem' },
+  'fluxos-liberados': { title: 'Fluxos Liberados', icon: <FolderOpen size={16} />, desc: 'Projetos com fluxos liberados' },
+  'fluxos-concluidos': { title: 'Fluxos Concluídos', icon: <Folder size={16} />, desc: 'Fluxos já concluídos' },
 };
 
 export default function Projects() {
   const params = useParams<{ folder?: string }>();
-  const folder = params?.folder ?? 'demandas';
+  const folder = params?.folder ?? 'gestao-de-fluxos';
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
+  const toggle = (id: string) => {
+    setCollapsed((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  };
 
   useEffect(() => {
     Promise.all([fetchProjects(), fetchTasks()]).then(([p, t]) => {
@@ -28,7 +37,7 @@ export default function Projects() {
     });
   }, []);
 
-  const meta = FOLDER_META[folder || 'demandas'] || FOLDER_META.demandas;
+  const meta = FOLDER_META[folder || 'gestao-de-fluxos'] || FOLDER_META['gestao-de-fluxos'];
   const projectTasks = (pid: string) => tasks.filter((t) => t.project_id === pid);
 
   return (
@@ -49,53 +58,100 @@ export default function Projects() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-          {projects.map((p) => {
-            const pTasks = projectTasks(p.id);
-            const ok = p.tasks_total <= p.contracted_value;
-            const pct = Math.min(100, Math.round((p.tasks_total / p.contracted_value) * 100));
+        <div className="bg-white border border-[var(--border)] rounded-lg overflow-hidden">
+          <table className="w-full border-collapse text-[13px]">
+            <thead>
+              <tr className="bg-[var(--surface3)] border-b border-[var(--border2)]">
+                <th className="p-3 px-4 text-left font-bold text-[var(--muted)] uppercase text-[11px] tracking-wider">Projeto</th>
+                <th className="p-3 px-4 text-left font-bold text-[var(--muted)] uppercase text-[11px] tracking-wider">Valor Total a Faturar (liberado)</th>
+                <th className="p-3 px-4 text-left font-bold text-[var(--muted)] uppercase text-[11px] tracking-wider">Data Limite para medição</th>
+                <th className="p-3 px-4 text-left font-bold text-[var(--muted)] uppercase text-[11px] tracking-wider">Líder do Projeto</th>
+              </tr>
+            </thead>
+            <tbody>
+              {projects.map((p) => {
+                const pTasks = projectTasks(p.id);
+                const fatTasks = pTasks.filter(t => t.status === 'fat');
+                const fatTotal = fatTasks.reduce((acc, t) => acc + t.value, 0);
+                
+                let limitDate = '25';
+                if (fatTasks.length > 0) {
+                  const dates = fatTasks.map(t => t.due_date ? new Date(t.due_date).getTime() : Infinity).filter(d => d !== Infinity);
+                  if (dates.length > 0) {
+                    const minDate = new Date(Math.min(...dates));
+                    limitDate = minDate.getDate().toString().padStart(2, '0');
+                  }
+                }
 
-            return (
-              <div key={p.id} className="bg-white border border-[var(--border)] rounded-lg overflow-hidden hover:border-[var(--border2)] transition-colors">
-                <div className="p-3.5">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-2.5 h-8 rounded-sm shrink-0" style={{ background: p.color }} />
-                    <div className="min-w-0">
-                      <div className="text-[13px] font-bold text-[var(--text)] truncate">{p.name}</div>
-                      <div className="text-[11px] text-[var(--muted)]">👤 {p.responsible}</div>
-                    </div>
-                  </div>
+                const open = !collapsed.has(p.id);
 
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="vbar-track flex-1">
-                      <div className="vbar-fill" style={{ width: `${pct}%`, background: ok ? 'var(--sustenta)' : 'var(--autodoc)' }} />
-                    </div>
-                    <span className="text-[10px] text-[var(--text2)] font-medium">{pct}%</span>
-                  </div>
-
-                  <div className="flex justify-between text-[11px] text-[var(--muted)] mb-3">
-                    <span>{brl(p.tasks_total)} / {brl(p.contracted_value)}</span>
-                    <span>{pTasks.length} tarefas</span>
-                  </div>
-
-                  <div className="flex flex-wrap gap-1">
-                    {(['fat', 'vis', 'agu', 'apr'] as const).map((s) => {
-                      const c = pTasks.filter((t) => t.status === s).length;
-                      if (!c) return null;
-                      return (
-                        <span key={s} className="text-[10px] font-semibold px-1.5 py-0.5 rounded" style={{
-                          background: s === 'fat' ? 'rgba(104,189,76,.1)' : s === 'vis' ? 'rgba(0,139,149,.1)' : s === 'agu' ? 'rgba(241,90,41,.1)' : 'rgba(163,76,157,.1)',
-                          color: s === 'fat' ? '#4fa832' : s === 'vis' ? '#007a83' : s === 'agu' ? '#d44e1a' : '#8b3f87',
-                        }}>
-                          {c} {STATUS_LABELS[s]}
-                        </span>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+                return (
+                  <React.Fragment key={p.id}>
+                    <tr 
+                      onClick={() => toggle(p.id)} 
+                      className="border-b border-[var(--border)] hover:bg-[var(--surface2)] cursor-pointer transition-colors"
+                    >
+                      <td className="p-3 px-4 font-bold text-[var(--text)]">
+                        <div className="flex items-center gap-2">
+                          <div className="w-1 h-5 rounded-sm shrink-0" style={{ background: p.color || '#999' }} />
+                          {p.name}
+                        </div>
+                      </td>
+                      <td className="p-3 px-4 font-mono text-[var(--sustenta)] font-semibold">{brl(fatTotal)}</td>
+                      <td className="p-3 px-4 text-[var(--text2)]">Dia {limitDate}</td>
+                      <td className="p-3 px-4 text-[var(--text2)]">👤 {p.responsible}</td>
+                    </tr>
+                    
+                    {open && (
+                      <tr className="bg-[var(--surface2)] border-b border-[var(--border)]">
+                        <td colSpan={4} className="p-0">
+                          <div className="p-5 border-l-4" style={{ borderColor: p.color || '#999' }}>
+                            <table className="w-full text-[12px] bg-white rounded border border-[var(--border)] shadow-sm">
+                              <thead>
+                                <tr className="bg-[var(--surface3)] border-b border-[var(--border)]">
+                                  <th className="text-left text-[var(--muted)] p-2 px-3 font-semibold uppercase text-[10px]">Tarefa / Parcela</th>
+                                  <th className="text-left text-[var(--muted)] p-2 px-3 font-semibold uppercase text-[10px]">Status</th>
+                                  <th className="text-left text-[var(--muted)] p-2 px-3 font-semibold uppercase text-[10px]">Valor</th>
+                                  <th className="text-left text-[var(--muted)] p-2 px-3 font-semibold uppercase text-[10px]">Vencimento</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {pTasks.map((t) => (
+                                  <tr key={t.id} className="border-b border-[var(--border2)] last:border-0 hover:bg-[var(--surface2)]">
+                                    <td className="p-2 px-3">
+                                      <div className="font-medium text-[var(--text)]">{t.name}</div>
+                                      <div className="text-[10px] text-[var(--muted)]">{t.description}</div>
+                                    </td>
+                                    <td className="p-2 px-3">
+                                      <span className="pill" style={{
+                                        background: t.status === 'fat' ? 'rgba(104,189,76,.14)' : t.status === 'vis' ? 'rgba(0,139,149,.14)' : t.status === 'agu' ? 'rgba(241,90,41,.14)' : 'rgba(163,76,157,.14)',
+                                        color: t.status === 'fat' ? '#4fa832' : t.status === 'vis' ? '#007a83' : t.status === 'agu' ? '#d44e1a' : '#8b3f87'
+                                      }}>
+                                        {STATUS_LABELS[t.status]}
+                                      </span>
+                                    </td>
+                                    <td className="p-2 px-3 font-mono text-[var(--sustenta)]">{brl(t.value)}</td>
+                                    <td className="p-2 px-3 text-[var(--muted)]">
+                                      {t.due_date ? new Date(t.due_date).toLocaleDateString('pt-BR') : '—'}
+                                    </td>
+                                  </tr>
+                                ))}
+                                {pTasks.length === 0 && (
+                                  <tr>
+                                    <td colSpan={4} className="text-center py-4 text-[var(--muted)]">Nenhuma parcela cadastrada.</td>
+                                  </tr>
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
 
         {projects.length === 0 && (

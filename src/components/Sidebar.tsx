@@ -44,21 +44,21 @@ export default function Sidebar() {
       <div className="sb-hr" />
       <div className="sb-section">
         <div className="sb-title">Projetos e pastas</div>
-        <Link href="/projects/demandas" className={navLinkClass('/projects/demandas', pathname)}>
+        <Link href="/projects/gestao-de-fluxos" className={navLinkClass('/projects/gestao-de-fluxos', pathname)}>
           <FolderOpen size={13} className="nav-icon" />
-          <span>1. Demandas</span>
+          <span>GESTÃO DE FLUXOS</span>
         </Link>
-        <Link href="/projects/aprovacao" className={navLinkClass('/projects/aprovacao', pathname)}>
+        <Link href="/projects/fluxos-liberados" className={navLinkClass('/projects/fluxos-liberados', pathname)}>
           <FolderOpen size={13} className="nav-icon" />
-          <span>2. Projetos em Aprovação</span>
+          <span>FLUXOS LIBERADOS</span>
         </Link>
         <Link href="/faturamento" className={navLinkClass('/faturamento', pathname)}>
           <Folder size={13} className="nav-icon" />
-          <span>3. Projetos Ativos | Desen…</span>
+          <span>FLUXOS EM ABERTO</span>
         </Link>
-        <Link href="/projects/implantados" className={navLinkClass('/projects/implantados', pathname)}>
+        <Link href="/projects/fluxos-concluidos" className={navLinkClass('/projects/fluxos-concluidos', pathname)}>
           <FolderOpen size={13} className="nav-icon" />
-          <span>4. Projetos Implantados</span>
+          <span>FLUXOS CONCLUÍDOS</span>
         </Link>
       </div>
       <div className="sb-hr" />

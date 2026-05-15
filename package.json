@@ -4,12 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
+    "dev": "vite",
+    "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "next start",
-    "typecheck": "tsc --noEmit -p tsconfig.app.json"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",
