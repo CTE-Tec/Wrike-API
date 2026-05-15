@@ -1,3 +1,5 @@
+'use client';
+
 import { useEffect, useState } from 'react';
 import { fetchInboxMessages, markMessageRead } from '../lib/data';
 import type { InboxMessage } from '../lib/types';

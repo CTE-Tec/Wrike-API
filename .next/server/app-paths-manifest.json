@@ -1,0 +1,9 @@
+{
+  "/page": "app/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/my-tasks/page": "app/my-tasks/page.js",
+  "/projects/[folder]/page": "app/projects/[folder]/page.js",
+  "/faturamento/page": "app/faturamento/page.js",
+  "/settings/page": "app/settings/page.js",
+  "/integrations/page": "app/integrations/page.js"
+}

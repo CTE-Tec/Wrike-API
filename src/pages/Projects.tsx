@@ -1,10 +1,13 @@
+'use client';
+
 import { useEffect, useState } from 'react';
 import { fetchProjects, fetchTasks, brl } from '../lib/data';
 import type { Project, Task } from '../lib/types';
 import { STATUS_LABELS } from '../lib/types';
 import Layout from '../components/Layout';
 import { FolderOpen, Folder } from 'lucide-react';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'next/navigation';
+import type React from 'react';
 
 const FOLDER_META: Record<string, { title: string; icon: React.ReactNode; desc: string }> = {
   demandas: { title: '1. Demandas', icon: <FolderOpen size={16} />, desc: 'Demandas recebidas e em triagem' },
@@ -13,7 +16,8 @@ const FOLDER_META: Record<string, { title: string; icon: React.ReactNode; desc: 
 };
 
 export default function Projects() {
-  const { folder } = useParams<{ folder: string }>();
+  const params = useParams<{ folder?: string }>();
+  const folder = params?.folder ?? 'demandas';
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
 

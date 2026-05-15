@@ -1,3 +1,5 @@
+'use client';
+
 import { useEffect, useState, useCallback } from 'react';
 import { fetchProjects, fetchTasks, updateTaskStatus, brl } from '../lib/data';
 import { showToast } from '../components/Toast';

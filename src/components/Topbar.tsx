@@ -1,3 +1,5 @@
+'use client';
+
 import HexLogo from './HexLogo';
 import { RefreshCw, Download } from 'lucide-react';
 import { showToast } from './Toast';

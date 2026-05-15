@@ -1,3 +1,5 @@
+'use client';
+
 import Layout from '../components/Layout';
 import { Settings as SettingsIcon, User, Bell, Shield, Palette } from 'lucide-react';
 

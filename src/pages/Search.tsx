@@ -1,3 +1,5 @@
+'use client';
+
 import { useState, useEffect } from 'react';
 import { fetchProjects, fetchTasks, brl } from '../lib/data';
 import type { Project, Task } from '../lib/types';

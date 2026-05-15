@@ -1,3 +1,5 @@
+'use client';
+
 import { useEffect, useState } from 'react';
 import { fetchIntegrations } from '../lib/data';
 import type { Integration } from '../lib/types';
