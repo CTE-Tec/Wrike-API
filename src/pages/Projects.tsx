@@ -10,6 +10,7 @@ import { useParams } from 'next/navigation';
 import React from 'react';
 
 const FOLDER_META: Record<string, { title: string; icon: React.ReactNode; desc: string }> = {
+  projetos: { title: 'Projetos', icon: <FolderOpen size={16} />, desc: 'Todos os projetos com parcelas e entregáveis' },
   'gestao-de-fluxos': { title: 'Gestão de Fluxos', icon: <FolderOpen size={16} />, desc: 'Demandas recebidas e em triagem' },
   'fluxos-liberados': { title: 'Fluxos Liberados', icon: <FolderOpen size={16} />, desc: 'Projetos com fluxos liberados' },
   'fluxos-concluidos': { title: 'Fluxos Concluídos', icon: <Folder size={16} />, desc: 'Fluxos já concluídos' },
@@ -17,7 +18,7 @@ const FOLDER_META: Record<string, { title: string; icon: React.ReactNode; desc: 
 
 export default function Projects() {
   const params = useParams<{ folder?: string }>();
-  const folder = params?.folder ?? 'gestao-de-fluxos';
+  const folder = params?.folder ?? 'projetos';
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -37,7 +38,7 @@ export default function Projects() {
     });
   }, []);
 
-  const meta = FOLDER_META[folder || 'gestao-de-fluxos'] || FOLDER_META['gestao-de-fluxos'];
+  const meta = FOLDER_META[folder] || FOLDER_META['projetos'];
   const projectTasks = (pid: string) => tasks.filter((t) => t.project_id === pid);
 
   return (

@@ -16,45 +16,55 @@
       "static/chunks/main-app.js",
       "static/chunks/app/page.js"
     ],
-    "/inbox/page": [
+    "/clientes/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/inbox/page.js"
+      "static/chunks/app/clientes/page.js"
     ],
-    "/dashboard/page": [
+    "/cadastro-faturamento/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/dashboard/page.js"
+      "static/chunks/app/cadastro-faturamento/page.js"
     ],
-    "/my-tasks/page": [
+    "/contratos/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/my-tasks/page.js"
-    ],
-    "/projects/[folder]/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/projects/[folder]/page.js"
+      "static/chunks/app/contratos/page.js"
     ],
     "/faturamento/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/faturamento/page.js"
     ],
-    "/settings/page": [
+    "/ficha-cliente/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/settings/page.js"
+      "static/chunks/app/ficha-cliente/page.js"
     ],
-    "/integrations/page": [
+    "/equipe/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/integrations/page.js"
+      "static/chunks/app/equipe/page.js"
     ],
-    "/_not-found/page": [
+    "/projetos/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/_not-found/page.js"
+      "static/chunks/app/projetos/page.js"
+    ],
+    "/my-tasks/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/my-tasks/page.js"
+    ],
+    "/dashboard/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/dashboard/page.js"
+    ],
+    "/inbox/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/inbox/page.js"
     ]
   }
 }

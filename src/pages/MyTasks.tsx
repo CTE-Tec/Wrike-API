@@ -29,8 +29,7 @@ export default function MyTasks() {
     });
   }, []);
 
-  const projectMap = Object.fromEntries(projects.map((p) => [p.id, p]));
-  const filtered = filter === 'all' ? tasks : tasks.filter((t) => t.status === filter);
+
 
   const counts = {
     all: tasks.length,

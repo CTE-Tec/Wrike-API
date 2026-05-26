@@ -1,23 +1,23 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { fetchProjects, fetchTasks, updateTaskStatus, brl } from '../lib/data';
+import { fetchProjects, fetchTasks, brl } from '../lib/data';
 import { showToast } from '../components/Toast';
 import type { Project, Task, TaskStatus } from '../lib/types';
 import { STATUS_LABELS } from '../lib/types';
 import Layout from '../components/Layout';
-import StatusPill from '../components/StatusPill';
 import Modal from '../components/Modal';
-import { LayoutGrid, Kanban, Calendar, Search, SlidersHorizontal } from 'lucide-react';
+import { Search, AlertOctagon, Check } from 'lucide-react';
 
 export default function Faturamento() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [filter, setFilter] = useState<TaskStatus | 'all'>('all');
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('SENNA-TOWER-01');
+  const [filter, setFilter] = useState<TaskStatus | 'all' | 'critical'>('all');
   const [search, setSearch] = useState('');
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const [modalTask, setModalTask] = useState<Task | null>(null);
-  const [modalProject, setModalProject] = useState<Project | null>(null);
+  const [showReajusteModal, setShowReajusteModal] = useState(false);
+  const [reajusteIndex, setReajusteIndex] = useState<'INCC-M' | 'IPC'>('INCC-M');
+  const [reajustePct, setReajustePct] = useState<number>(4.2);
 
   const load = useCallback(async () => {
     const [p, t] = await Promise.all([fetchProjects(), fetchTasks()]);
@@ -25,272 +25,473 @@ export default function Faturamento() {
     setTasks(t);
   }, []);
 
-  useEffect(() => { load(); }, [load]);
-
-  const toggle = (id: string) => {
-    setCollapsed((prev) => {
-      const n = new Set(prev);
-      if (n.has(id)) n.delete(id); else n.add(id);
-      return n;
-    });
-  };
-
-  const handleSendApproval = async (taskId: string) => {
-    await updateTaskStatus(taskId, 'agu');
-    const t = tasks.find((x) => x.id === taskId);
-    showToast('📤', 'Aprovação enviada', `E-mail enviado a ${t?.responsible}`, 'to');
+  useEffect(() => {
     load();
+  }, [load]);
+
+  const handleUpdateTaskField = (taskId: string, field: keyof Task, value: any) => {
+    setTasks(prev => prev.map(t => {
+      if (t.id === taskId) {
+        const updated = { ...t, [field]: value };
+        if (field === 'status') {
+          // If status is cancelled or similar, adjust launch_navis
+          if (value === 'vis' && t.due_date && new Date(t.due_date).getFullYear() > 2030) {
+            updated.launch_navis = 'Não Lançar';
+          } else {
+            updated.launch_navis = 'Lançar';
+          }
+        }
+        return updated;
+      }
+      return t;
+    }));
+    showToast('✏️', 'Atividade atualizada', 'Campo alterado localmente.', 'to');
   };
 
-  const handleApprove = async () => {
-    if (!modalTask) return;
-    await updateTaskStatus(modalTask.id, 'apr');
-    showToast('✅', 'Aprovado!', `${modalTask.name} aprovado para faturamento.`, 'tg');
-    setModalTask(null);
-    setModalProject(null);
-    load();
+  const handleProjectAction = (projectId: string, action: 'medido' | 'faturado' | 'pago') => {
+    setTasks(prev => prev.map(t => {
+      if (t.project_id === projectId) {
+        if (action === 'medido' && t.status === 'fat') {
+          return { ...t, status: 'agu', status_nf: 'Enviar Nota' };
+        }
+        if (action === 'faturado' && t.status === 'agu') {
+          return { ...t, status: 'vis', status_nf: 'Nota Enviada' };
+        }
+        if (action === 'pago') {
+          return { ...t, status: 'apr', status_nf: 'Pago' };
+        }
+      }
+      return t;
+    }));
+
+    const labels = {
+      medido: 'Medições enviadas (status atualizado no Wrike)',
+      faturado: 'Notas faturadas (faturamento enviado)',
+      pago: 'Confirmado pagamento (fluxo concluído)'
+    };
+    showToast('⚡', 'Ação do Projeto Executada', labels[action], 'tg');
   };
 
-  const handleReject = async (taskId: string) => {
-    await updateTaskStatus(taskId, 'vis');
-    const t = tasks.find((x) => x.id === taskId);
-    showToast('📩', 'Reprovado', `${t?.name} devolvido para revisão`, 'tr');
-    load();
+  const handleApproveFlow = (projectId: string) => {
+    setProjects(prev => prev.map(p => {
+      if (p.id === projectId) {
+        return { ...p, approved_by_owner: true };
+      }
+      return p;
+    }));
+    showToast('✅', 'Fluxo Aprovado', 'Líder de projeto aprovou o fluxo completo do mês.', 'tg');
   };
 
-  const openApprovalModal = (task: Task, project: Project) => {
-    setModalTask(task);
-    setModalProject(project);
+  const handleApplyReajuste = () => {
+    setTasks(prev => prev.map(t => {
+      if (t.project_id === selectedProjectId && t.etapa === 'Reajuste') {
+        const valAnterior = t.value;
+        const novoVal = Math.round(t.value * (1 + reajustePct / 100));
+        return {
+          ...t,
+          value_previous: valAnterior,
+          value: novoVal,
+          description: `${t.description} (Reajustado por ${reajusteIndex}: ${reajustePct}%)`
+        };
+      }
+      return t;
+    }));
+    setShowReajusteModal(false);
+    showToast('📈', 'Reajuste Aplicado', `Novos valores recalculados com base no ${reajusteIndex}.`, 'tg');
   };
 
-  const term = search.toLowerCase();
+  const selectedProject = projects.find(p => p.id === selectedProjectId) || projects[0];
 
-  const filteredProjects = projects.map((p) => {
-    const pTasks = tasks.filter((t) => t.project_id === p.id);
-    const filtered = pTasks.filter((t) => {
-      if (filter !== 'all' && t.status !== filter) return false;
-      if (term && !t.name.toLowerCase().includes(term) && !p.name.toLowerCase().includes(term)) return false;
-      return true;
-    });
-    return { ...p, tasks: filtered };
-  }).filter((p) => p.tasks.length > 0 || (term && p.name.toLowerCase().includes(term)));
+  if (!selectedProject) {
+    return <Layout breadcrumb={[{ label: 'Fluxo Financeiro' }]}><div className="p-8">Carregando...</div></Layout>;
+  }
 
-  const totalFaturar = tasks.filter((t) => t.status === 'fat').reduce((s, t) => s + t.value, 0);
-  const totalAprovado = tasks.filter((t) => t.status === 'apr').reduce((s, t) => s + t.value, 0);
-  const alertCount = projects.filter((p) => p.tasks_total > p.contracted_value).length;
+  // Filter tasks belonging to current project
+  const projectTasks = tasks.filter(t => t.project_id === selectedProject.id);
 
-  const toolbar = (
-    <div className="vtoolbar">
-      <div className="vtabs">
-        <div className="vtab active">
-          <LayoutGrid size={11} />
-          Tabela
-        </div>
-        <div className="vtab" onClick={() => showToast('ℹ️', 'Kanban', 'Em desenvolvimento', '')}>
-          <Kanban size={11} />
-          Kanban
-        </div>
-        <div className="vtab" onClick={() => showToast('ℹ️', 'Cronograma', 'Em desenvolvimento', '')}>
-          <Calendar size={11} />
-          Cronograma
-        </div>
-      </div>
-      <div className="vsep" />
-      <div className="flex gap-1 flex-wrap">
-        {(['all', 'fat', 'vis', 'agu', 'apr'] as const).map((f) => (
-          <button
-            key={f}
-            className={`fchip${filter === f ? ' active' : ''}`}
-            onClick={() => setFilter(f)}
-          >
-            {f === 'all' ? 'Todos' : `● ${STATUS_LABELS[f]}`}
-          </button>
-        ))}
-      </div>
-      <div className="vright">
-        <div className="search-box">
-          <Search size={12} className="absolute left-[7px] text-[var(--muted)] pointer-events-none" />
-          <input
-            type="text"
-            placeholder="Pesquisar…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <button className="btn-icon">
-          <SlidersHorizontal size={13} />
-        </button>
-      </div>
-    </div>
-  );
+  // Apply filters
+  const filteredTasks = projectTasks.filter(t => {
+    if (filter === 'critical') return selectedProject.is_critical;
+    if (filter !== 'all' && t.status !== filter) return false;
+    if (search) {
+      const term = search.toLowerCase();
+      return t.name.toLowerCase().includes(term) || t.etapa.toLowerCase().includes(term);
+    }
+    return true;
+  });
+
+  // Calculate totals by stage for the horizontal summary table
+  const stages = ['Projeto', 'Eficiência', 'Interiores', 'Materiais', 'Obras', 'Operação', 'Sistemas Prediais', 'Taxas', 'Outros'];
+  
+  const stageTotals = stages.reduce((acc, stage) => {
+    const stageTasks = projectTasks.filter(t => t.etapa === stage);
+    const original = stageTasks.reduce((s, t) => s + (t.value_previous || t.value), 0);
+    const updated = stageTasks.reduce((s, t) => s + t.value, 0);
+    acc[stage] = { original, updated };
+    return acc;
+  }, {} as Record<string, { original: number; updated: number }>);
+
+  // Totals for horizontal table
+  const totalOriginal = Object.values(stageTotals).reduce((s, v) => s + v.original, 0);
+  const totalUpdated = Object.values(stageTotals).reduce((s, v) => s + v.updated, 0);
 
   return (
     <Layout
       breadcrumb={[
         { label: 'Inteligência Artificial | Projetos' },
-        { label: '3. Projetos Ativos | Desenvolvimento' },
-        { label: 'Faturamento & Aprovação', active: true },
+        { label: 'Financeiro' },
+        { label: 'Fluxo Financeiro', active: true },
       ]}
-      toolbar={toolbar}
     >
-      <div className="kpi-strip">
-        <div className="kpi-box kb-green">
-          <div className="kpi-lbl">Total a Faturar</div>
-          <div className="kpi-val">{brl(totalFaturar)}</div>
-          <div className="kpi-sub">{tasks.filter((t) => t.status === 'fat').length} tarefas prontas</div>
-        </div>
-        <div className="kpi-box kb-teal">
-          <div className="kpi-lbl">Em Visualização</div>
-          <div className="kpi-val">{tasks.filter((t) => t.status === 'vis').length}</div>
-          <div className="kpi-sub">tarefas em andamento</div>
-        </div>
-        <div className="kpi-box kb-orange">
-          <div className="kpi-lbl">Aguard. Aprovação</div>
-          <div className="kpi-val">{tasks.filter((t) => t.status === 'agu').length}</div>
-          <div className="kpi-sub">aguardando resposta</div>
-        </div>
-        <div className="kpi-box kb-purple">
-          <div className="kpi-lbl">Aprovados</div>
-          <div className="kpi-val">{brl(totalAprovado)}</div>
-          <div className="kpi-sub">{tasks.filter((t) => t.status === 'apr').length} tarefas aprovadas</div>
-        </div>
-        <div className="kpi-box kb-red">
-          <div className="kpi-lbl">Alertas de Valor</div>
-          <div className="kpi-val">{alertCount}</div>
-          <div className="kpi-sub">projetos com divergência</div>
-        </div>
-      </div>
-
-      {alertCount > 0 && (
-        <div className="alert-bar">
-          <span className="ab-icon">⚠️</span>
-          <div>
-            <div className="ab-title">Divergência detectada em {alertCount} projetos</div>
-            <div className="ab-body">O somatório das tarefas excede o valor contratado. O responsável foi notificado automaticamente via e-mail.</div>
+      {/* Critical Flow Alert Banner */}
+      {selectedProject.is_critical && (
+        <div className="mx-4 mt-4 bg-purple-900/10 border border-purple-500/30 text-purple-200 p-3 rounded-lg flex items-center justify-between animate-pulse">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-purple-500 inline-block animate-ping" />
+            <AlertOctagon size={16} className="text-purple-400" />
+            <div>
+              <span className="font-bold">Atenção Líder Administrativo:</span> Este projeto está próximo da data limite de medição ({selectedProject.flow_date}). Risco de perda de faturamento!
+            </div>
           </div>
+          <button 
+            onClick={() => handleProjectAction(selectedProject.id, 'medido')}
+            className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-1 px-3 rounded text-xs transition"
+          >
+            Enviar Medição Agora
+          </button>
         </div>
       )}
 
-      <div className="projs-area">
-        <div className="sec-hdr">Projetos Ativos</div>
-        {filteredProjects.map((p) => {
-          const ok = p.tasks_total <= p.contracted_value;
-          const pct = Math.min(100, Math.round((p.tasks_total / p.contracted_value) * 100));
-          const bar = ok ? 'var(--sustenta)' : 'var(--autodoc)';
-          const open = !collapsed.has(p.id);
-          const cnt = { fat: 0, vis: 0, agu: 0, apr: 0 } as Record<string, number>;
-          p.tasks.forEach((t) => { cnt[t.status] = (cnt[t.status] || 0) + 1; });
+      {/* Top Project Selector & Quick Stats */}
+      <div className="p-4 grid grid-cols-1 xl:grid-cols-4 gap-4">
+        {/* Project Meta Card */}
+        <div className="bg-white border border-[var(--border)] rounded-xl p-4 shadow-sm xl:col-span-3">
+          <div className="flex items-center justify-between mb-4 pb-3 border-b border-[var(--border)]">
+            <div className="flex items-center gap-3">
+              <div className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: selectedProject.color }} />
+              <div>
+                <h2 className="text-lg font-bold text-[var(--text)]">{selectedProject.name}</h2>
+                <div className="text-xs text-[var(--muted)]">
+                  Cliente: <span className="font-semibold text-[var(--text2)]">{selectedProject.client}</span> | 
+                  Rótulo: <span className="font-semibold text-[var(--text2)]">{selectedProject.label_code}</span> | 
+                  Owner: <span className="font-semibold text-purple-700">👤 {selectedProject.owner}</span>
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <select 
+                value={selectedProjectId} 
+                onChange={(e) => setSelectedProjectId(e.target.value)}
+                className="bg-[var(--surface2)] border border-[var(--border2)] rounded px-3 py-1 text-xs outline-none"
+              >
+                {projects.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+              <button 
+                onClick={() => setShowReajusteModal(true)}
+                className="bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs py-1 px-3 rounded transition"
+              >
+                Aplicar Reajuste
+              </button>
+            </div>
+          </div>
 
-          return (
-            <div className="pcard" key={p.id}>
-              <div className="phead" onClick={() => toggle(p.id)}>
-                <div className="p-accent" style={{ background: p.color }} />
-                <div className="p-info">
-                  <div className="p-name">{p.name}</div>
-                  <div className="p-meta">
-                    <span>👤 {p.responsible}</span>
-                    <span>📋 {p.tasks.length} itens</span>
-                    <span>💰 {brl(p.contracted_value)}</span>
-                  </div>
-                </div>
-                <div className="p-stats">
-                  {cnt.fat ? <div className="sbadge" style={{ background: 'rgba(104,189,76,.12)', color: 'var(--sustenta)', borderColor: 'rgba(104,189,76,.22)' }}>{cnt.fat} Faturar</div> : null}
-                  {cnt.agu ? <div className="sbadge" style={{ background: 'rgba(241,90,41,.12)', color: 'var(--qualtech)', borderColor: 'rgba(241,90,41,.22)' }}>{cnt.agu} Aguardando</div> : null}
-                  {cnt.apr ? <div className="sbadge" style={{ background: 'rgba(163,76,157,.12)', color: 'var(--gerencia)', borderColor: 'rgba(163,76,157,.22)' }}>{cnt.apr} Aprovado</div> : null}
-                </div>
-                <button className={`toggle-btn ${open ? 'open' : ''}`}>▾</button>
-              </div>
-              <div className="pcol-bar">
-                <span className={`vtag ${ok ? 'ok' : 'warn'}`}>
-                  {ok ? '✓ Valor validado' : '⚠ Valor excedido'}
-                </span>
-                <div className="vbar-track">
-                  <div className="vbar-fill" style={{ width: `${pct}%`, background: bar }} />
-                </div>
-                <span className="vnums">{brl(p.tasks_total)} / {brl(p.contracted_value)}</span>
-              </div>
-              {open && (
-                <div className="tbl-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Nome</th>
-                        <th>Responsável</th>
-                        <th>Status</th>
-                        <th>Valor Contratado</th>
-                        <th>Vencimento</th>
-                        <th>Ações</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {p.tasks.map((t) => (
-                        <tr key={t.id}>
-                          <td className="t-name">
-                            <div className="t-n">{t.name}</div>
-                            <div className="t-d">{t.description}</div>
-                          </td>
-                          <td className="c-dim text-xs">{t.responsible}</td>
-                          <td><StatusPill status={t.status} /></td>
-                          <td className="mono c-green">{brl(t.value)}</td>
-                          <td className="mono c-muted">{t.due_date ? new Date(t.due_date).toLocaleDateString('pt-BR') : '—'}</td>
-                          <td className="acts">
-                            {t.status === 'fat' && (
-                              <button className="abtn abtn-send" onClick={() => handleSendApproval(t.id)}>Enviar Aprovação</button>
-                            )}
-                            {t.status === 'agu' && (
-                              <>
-                                <button className="abtn abtn-ok" onClick={() => openApprovalModal(t, p)}>Aprovar</button>
-                                <button className="abtn abtn-rej" style={{ marginLeft: 4 }} onClick={() => handleReject(t.id)}>Reprovar</button>
-                              </>
-                            )}
-                            {t.status !== 'fat' && t.status !== 'agu' && <span className="c-muted text-[11px]">—</span>}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+          {/* Detailed Financial Overview Grid */}
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 text-center">
+            <div className="bg-[var(--surface2)] p-2 rounded">
+              <div className="text-[10px] uppercase font-bold text-[var(--muted)]">Valor Original</div>
+              <div className="text-sm font-bold text-[var(--text)]">{brl(selectedProject.contract_original_value)}</div>
+            </div>
+            <div className="bg-[var(--surface2)] p-2 rounded">
+              <div className="text-[10px] uppercase font-bold text-[var(--muted)]">Total Aditivado</div>
+              <div className="text-sm font-bold text-[var(--text)]">{brl(selectedProject.contract_aditivo_value)}</div>
+            </div>
+            <div className="bg-[var(--surface2)] p-2 rounded">
+              <div className="text-[10px] uppercase font-bold text-[var(--muted)]">Lançado Navis</div>
+              <div className="text-sm font-bold text-teal-700">{brl(selectedProject.navis_launched_value)}</div>
+            </div>
+            <div className="bg-[var(--surface2)] p-2 rounded">
+              <div className="text-[10px] uppercase font-bold text-[var(--muted)]">Adicional Reajuste</div>
+              <div className="text-sm font-bold text-[var(--text)]">{brl(selectedProject.reajuste_adicional_value)}</div>
+            </div>
+            <div className="bg-[var(--surface2)] p-2 rounded">
+              <div className="text-[10px] uppercase font-bold text-[var(--muted)]">Margem</div>
+              <div className="text-sm font-bold text-amber-700">{selectedProject.margin_pct}%</div>
+            </div>
+            <div className="bg-purple-900/5 p-2 rounded border border-purple-500/20">
+              <div className="text-[10px] uppercase font-bold text-purple-700">Planejado Atual</div>
+              <div className="text-sm font-bold text-purple-900">{brl(selectedProject.total_planned_value)}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Global Flow Action Card */}
+        <div className="bg-white border border-[var(--border)] rounded-xl p-4 shadow-sm flex flex-col justify-between">
+          <div>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--muted)] mb-2">Aprovações do Fluxo</h3>
+            <div className="flex items-center justify-between mb-3 text-xs">
+              <span>Status aprovação Líder:</span>
+              {selectedProject.approved_by_owner ? (
+                <span className="bg-green-100 text-green-800 font-bold px-2 py-0.5 rounded text-[10px]">APROVADO</span>
+              ) : (
+                <span className="bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded text-[10px]">PENDENTE</span>
               )}
             </div>
-          );
-        })}
-        {filteredProjects.length === 0 && (
-          <div className="text-center py-14 text-[var(--muted)]">Nenhum resultado encontrado.</div>
-        )}
+            <p className="text-[11px] text-[var(--muted)] leading-relaxed mb-4">
+              O fluxo deve ser validado integralmente pelo owner para disparar as medições subsequentes.
+            </p>
+          </div>
+          <div className="space-y-2">
+            {!selectedProject.approved_by_owner && (
+              <button 
+                onClick={() => handleApproveFlow(selectedProject.id)}
+                className="w-full bg-green-600 hover:bg-green-700 text-white font-bold text-xs py-1.5 rounded transition flex items-center justify-center gap-1"
+              >
+                <Check size={14} /> Aprovar Fluxo Completo
+              </button>
+            )}
+            <div className="grid grid-cols-3 gap-1">
+              <button onClick={() => handleProjectAction(selectedProject.id, 'medido')} className="bg-[var(--surface3)] hover:bg-[var(--border2)] text-[10px] font-bold py-1 rounded transition text-center">Medições</button>
+              <button onClick={() => handleProjectAction(selectedProject.id, 'faturado')} className="bg-[var(--surface3)] hover:bg-[var(--border2)] text-[10px] font-bold py-1 rounded transition text-center">Faturar</button>
+              <button onClick={() => handleProjectAction(selectedProject.id, 'pago')} className="bg-[var(--surface3)] hover:bg-[var(--border2)] text-[10px] font-bold py-1 rounded transition text-center">Confirmar Pg</button>
+            </div>
+          </div>
+        </div>
       </div>
 
+      {/* Horizontal Stage Summary Table */}
+      <div className="mx-4 bg-white border border-[var(--border)] rounded-xl shadow-sm overflow-hidden mb-6">
+        <div className="bg-[var(--surface2)] px-4 py-2 text-xs font-bold text-[var(--text2)] border-b border-[var(--border)]">
+          Resumo Financeiro por Etapa do Contrato
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-center text-xs">
+            <thead>
+              <tr className="bg-[var(--surface3)] border-b border-[var(--border2)]">
+                <th className="py-2 text-left pl-4 font-bold text-[var(--muted)]">TIPO</th>
+                {stages.map(s => (
+                  <th key={s} className="py-2 font-bold text-[var(--muted)]">{s.toUpperCase()}</th>
+                ))}
+                <th className="py-2 font-bold text-[var(--text)]">TOTAL</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-b border-[var(--border)]">
+                <td className="py-2 text-left pl-4 font-semibold text-[var(--text2)]">Original</td>
+                {stages.map(s => (
+                  <td key={s} className="py-2 text-[var(--text2)]">{brl(stageTotals[s].original)}</td>
+                ))}
+                <td className="py-2 font-bold text-[var(--text)]">{brl(totalOriginal)}</td>
+              </tr>
+              <tr>
+                <td className="py-2 text-left pl-4 font-semibold text-[var(--text2)]">Atualizado</td>
+                {stages.map(s => (
+                  <td key={s} className="py-2 text-[var(--text2)]">{brl(stageTotals[s].updated)}</td>
+                ))}
+                <td className="py-2 font-bold text-teal-700">{brl(totalUpdated)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* View Filters toolbar */}
+      <div className="vtoolbar mx-4 mb-4 rounded-lg border border-[var(--border)]">
+        <div className="flex gap-1 flex-wrap">
+          {(['all', 'fat', 'vis', 'agu', 'apr', 'critical'] as const).map((f) => (
+            <button
+              key={f}
+              className={`fchip${filter === f ? ' active' : ''}`}
+              onClick={() => setFilter(f)}
+            >
+              {f === 'all' ? 'Todos' : f === 'critical' ? '⚠️ Fluxos Críticos' : `● ${STATUS_LABELS[f] || f}`}
+            </button>
+          ))}
+        </div>
+        <div className="vright">
+          <div className="search-box">
+            <Search size={12} className="absolute left-[7px] text-[var(--muted)] pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Buscar atividade ou etapa…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Main Excel-like Spreadsheet Table */}
+      <div className="mx-4 bg-white border border-[var(--border)] rounded-xl shadow-sm overflow-hidden mb-8">
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="bg-[var(--surface3)] border-b border-[var(--border2)]">
+                <th className="py-2.5 pl-4 w-28">Etapa</th>
+                <th className="py-2.5">Nome da Atividade / Código Equipe</th>
+                <th className="py-2.5 text-center w-20">N.º Navis</th>
+                <th className="py-2.5 text-right w-28">Valor</th>
+                <th className="py-2.5 text-center w-36">Data de Conclusão</th>
+                <th className="py-2.5 text-center w-24">Status NF</th>
+                <th className="py-2.5 text-center w-32">Pagamento</th>
+                <th className="py-2.5 text-center w-28">Data Anterior</th>
+                <th className="py-2.5 text-right w-28">Valor Anterior</th>
+                <th className="py-2.5 w-40 text-center">Justificativa GAP</th>
+                <th className="py-2.5 text-center w-24">Lançar Navis</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredTasks.map((t) => {
+                // Formatting classes based on status / index sheet
+                const isNewOrReajuste = t.etapa === 'Reajuste';
+                const isEnviarNota = t.status_nf === 'Enviar Nota' || t.status === 'fat';
+                const isNotLaunched = t.launch_navis === 'Não Lançar';
+                
+                let rowBg = '';
+                if (isNewOrReajuste) rowBg = 'bg-emerald-500/10 hover:bg-emerald-500/15'; // Green row
+                else if (isEnviarNota) rowBg = 'bg-cyan-500/10 hover:bg-cyan-500/15'; // Blue row
+                else if (isNotLaunched) rowBg = 'opacity-60 bg-gray-50'; // Dimmed row
+
+                return (
+                  <tr key={t.id} className={`border-b border-[var(--border)] transition-colors ${rowBg}`}>
+                    {/* Etapa */}
+                    <td className="py-2 pl-4 font-bold text-[var(--text2)]">{t.etapa}</td>
+                    
+                    {/* Atividade & Team code label */}
+                    <td className="py-2 font-medium">
+                      <div className="text-[var(--text)]">{t.name}</div>
+                      <div className="text-[10px] text-[var(--muted)]">
+                        Equipe: <span className="font-semibold text-sky-800">{t.name.split('-')[3] || '—'}</span>
+                      </div>
+                    </td>
+                    
+                    {/* N.º Navis */}
+                    <td className="py-2 text-center mono font-semibold">{t.navis_num}</td>
+                    
+                    {/* Valor */}
+                    <td className="py-2 text-right mono font-bold text-emerald-700">{brl(t.value)}</td>
+                    
+                    {/* Data Conclusão */}
+                    <td className="py-2 text-center">
+                      <input 
+                        type="date"
+                        value={t.due_date ? t.due_date.split('T')[0] : ''}
+                        onChange={(e) => handleUpdateTaskField(t.id, 'due_date', e.target.value)}
+                        className="bg-transparent border border-transparent hover:border-gray-300 rounded px-1 text-[11px] text-center"
+                      />
+                    </td>
+                    
+                    {/* Status NF */}
+                    <td className="py-2 text-center">
+                      <select 
+                        value={t.status_nf}
+                        onChange={(e) => handleUpdateTaskField(t.id, 'status_nf', e.target.value)}
+                        className="bg-transparent border border-transparent hover:border-gray-300 rounded text-[11px]"
+                      >
+                        <option value="—">—</option>
+                        <option value="Pago">Pago</option>
+                        <option value="Concluído">Concluído</option>
+                        <option value="Nota Enviada">Nota Enviada</option>
+                        <option value="Enviar Nota">Enviar Nota</option>
+                      </select>
+                    </td>
+                    
+                    {/* Pagamento */}
+                    <td className="py-2 text-center font-bold">
+                      {t.pagamento === 'Nota Atrasada' ? (
+                        <span className="text-red-600 text-[10px] uppercase animate-pulse">⚠️ Nota Atrasada</span>
+                      ) : (
+                        <span className="text-[var(--muted)]">—</span>
+                      )}
+                    </td>
+                    
+                    {/* Data Anterior */}
+                    <td className="py-2 text-center text-slate-500 mono">{t.date_previous || '—'}</td>
+                    
+                    {/* Valor Anterior */}
+                    <td className="py-2 text-right text-slate-500 mono">{t.value_previous ? brl(t.value_previous) : '—'}</td>
+                    
+                    {/* Justificativa GAP */}
+                    <td className="py-2 text-center px-1">
+                      <select 
+                        value={t.gap_justification || ''}
+                        onChange={(e) => handleUpdateTaskField(t.id, 'gap_justification', e.target.value)}
+                        className="bg-white border border-gray-300 rounded px-1 py-0.5 text-[10px] w-full max-w-[150px] outline-none"
+                      >
+                        <option value="">Nenhuma</option>
+                        <option value="Atraso do cliente na aprovação">Atraso cliente na aprovação</option>
+                        <option value="Atraso do cliente na liberação da obra">Atraso cliente na liberação</option>
+                        <option value="Replanejamento de escopo">Replanejamento de escopo</option>
+                        <option value="Reajuste contratual pendente">Reajuste pendente</option>
+                      </select>
+                    </td>
+                    
+                    {/* Lançar Navis */}
+                    <td className="py-2 text-center">
+                      <span className={`font-semibold px-2 py-0.5 rounded text-[10px] ${
+                        t.launch_navis === 'Lançar' 
+                          ? 'bg-emerald-100 text-emerald-800' 
+                          : 'bg-gray-100 text-gray-600'
+                      }`}>
+                        {t.launch_navis}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Reajuste Modal */}
       <Modal
-        show={!!modalTask}
-        onClose={() => { setModalTask(null); setModalProject(null); }}
-        title={modalTask ? `Aprovação — ${modalTask.name}` : ''}
-        subtitle={modalProject ? `Projeto: ${modalProject.name}` : ''}
+        show={showReajusteModal}
+        onClose={() => setShowReajusteModal(false)}
+        title="Reajuste de Valores de Contrato"
+        subtitle={`Projeto: ${selectedProject.name}`}
         actions={
           <>
-            <button className="btn btn-rej" onClick={() => { if (modalTask) { handleReject(modalTask.id); setModalTask(null); setModalProject(null); } }}>✕ &nbsp;Reprovar</button>
-            <button className="btn btn-apr" onClick={handleApprove}>✓ &nbsp;Aprovar Faturamento</button>
+            <button className="btn btn-rej" onClick={() => setShowReajusteModal(false)}>Cancelar</button>
+            <button className="btn btn-apr" onClick={handleApplyReajuste}>Aplicar Índice</button>
           </>
         }
       >
-        {modalTask && (
-          <>
-            <div className="mf">
-              <label>Tarefa</label>
-              <div className="mv">{modalTask.name}<br /><span style={{ fontSize: 11, color: 'var(--muted)' }}>{modalTask.description}</span></div>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-[var(--muted)] uppercase mb-1">Índice</label>
+            <div className="flex gap-2">
+              <button 
+                type="button"
+                onClick={() => setReajusteIndex('INCC-M')}
+                className={`flex-1 py-1.5 rounded text-xs font-semibold border ${reajusteIndex === 'INCC-M' ? 'bg-sky-100 border-sky-500 text-sky-800' : 'bg-white border-gray-300'}`}
+              >
+                INCC-M
+              </button>
+              <button 
+                type="button"
+                onClick={() => setReajusteIndex('IPC')}
+                className={`flex-1 py-1.5 rounded text-xs font-semibold border ${reajusteIndex === 'IPC' ? 'bg-sky-100 border-sky-500 text-sky-800' : 'bg-white border-gray-300'}`}
+              >
+                IPC
+              </button>
             </div>
-            <div className="mf">
-              <label>Valor Contratado</label>
-              <div className="mv big">{brl(modalTask.value)}</div>
-            </div>
-            <div className="mf">
-              <label>Responsável</label>
-              <div className="mv">👤 {modalTask.responsible} &nbsp;<span style={{ fontSize: 11, color: 'var(--muted)' }}>{modalTask.email}</span></div>
-            </div>
-            <div className="mf">
-              <label>Vencimento</label>
-              <div className="mv mono">{modalTask.due_date ? new Date(modalTask.due_date).toLocaleDateString('pt-BR') : '—'}</div>
-            </div>
-          </>
-        )}
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-[var(--muted)] uppercase mb-1">Porcentagem de Reajuste (%)</label>
+            <input 
+              type="number" 
+              value={reajustePct}
+              onChange={(e) => setReajustePct(Number(e.target.value))}
+              step="0.01"
+              className="w-full bg-[var(--surface2)] border border-[var(--border2)] rounded px-3 py-1.5 text-sm outline-none"
+            />
+          </div>
+          <p className="text-[11px] text-[var(--muted)] leading-relaxed">
+            * O sistema irá identificar as linhas classificadas como "Reajuste" e aplicar o multiplicador atualizando os valores e mantendo a rastreabilidade na coluna 'Valor Anterior'.
+          </p>
+        </div>
       </Modal>
     </Layout>
   );

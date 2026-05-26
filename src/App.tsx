@@ -8,6 +8,8 @@ import Projects from './pages/Projects';
 import Settings from './pages/Settings';
 import Integrations from './pages/Integrations';
 import Search from './pages/Search';
+import Contratos from './pages/Contratos';
+import CadastroFaturamento from './pages/CadastroFaturamento';
 
 function App() {
   return (
@@ -19,6 +21,8 @@ function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/my-tasks" element={<MyTasks />} />
           <Route path="/faturamento" element={<Faturamento />} />
+          <Route path="/contratos" element={<Contratos />} />
+          <Route path="/cadastro-faturamento" element={<CadastroFaturamento />} />
           <Route path="/projects/:folder" element={<Projects />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/integrations" element={<Integrations />} />

@@ -1,10 +1,13 @@
 {
   "/page": "app/page.js",
-  "/my-tasks/page": "app/my-tasks/page.js",
-  "/projects/[folder]/page": "app/projects/[folder]/page.js",
+  "/cadastro-faturamento/page": "app/cadastro-faturamento/page.js",
+  "/contratos/page": "app/contratos/page.js",
   "/faturamento/page": "app/faturamento/page.js",
-  "/integrations/page": "app/integrations/page.js",
+  "/ficha-cliente/page": "app/ficha-cliente/page.js",
+  "/equipe/page": "app/equipe/page.js",
+  "/projetos/page": "app/projetos/page.js",
+  "/clientes/page": "app/clientes/page.js",
+  "/my-tasks/page": "app/my-tasks/page.js",
   "/dashboard/page": "app/dashboard/page.js",
-  "/inbox/page": "app/inbox/page.js",
-  "/settings/page": "app/settings/page.js"
+  "/inbox/page": "app/inbox/page.js"
 }

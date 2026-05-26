@@ -1,5 +1,28 @@
 export type TaskStatus = 'fat' | 'vis' | 'agu' | 'apr';
 
+export interface BillingProfile {
+  id: string;
+  projectId: string;
+  measurementDates: string;
+  billingDates: string;
+  docsRequired: string;
+  isNewClient: boolean;
+  notes?: string;
+}
+
+export interface ContractDetails {
+  id: string;
+  projectId: string;
+  documentUrl: string;
+  renewalDate: string;
+  index: 'INCC-M' | 'IPC' | 'IGP-M';
+  expectedReturnDate: string;
+  lastFupDate: string;
+  status: 'pending_client' | 'approved' | 'review_required';
+  originalValue: number;
+  readjustedValue: number;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -9,7 +32,23 @@ export interface Project {
   contracted_value: number;
   tasks_total: number;
   folder: string;
+  client?: string;
+  area?: string;
   created_at: string;
+  owner: string;
+  label_code: string;
+  flow_date: string;
+  contract_original_value: number;
+  contract_aditivo_value: number;
+  navis_launched_value: number;
+  reajuste_adicional_value: number;
+  margin_pct: number;
+  total_planned_value: number;
+  billing_day: number;
+  approved_by_owner: boolean;
+  is_critical: boolean;
+  billing_profile?: BillingProfile | null;
+  contract_details?: ContractDetails | null;
 }
 
 export interface Task {
@@ -23,6 +62,14 @@ export interface Task {
   email: string;
   due_date: string | null;
   created_at: string;
+  etapa: string;          // Stage e.g. "Projeto", "Obras", "Sistemas Prediais", "Reajuste"
+  navis_num: string;      // Navis code e.g. "05", "01", "08"
+  status_nf: string;      // "Pago", "Concluído", "Nota Enviada", "Enviar Nota", "—"
+  pagamento: string;      // "Nota Atrasada", "No Prazo", "—"
+  date_previous: string | null;
+  value_previous: number | null;
+  gap_justification: string | null;
+  launch_navis: 'Lançar' | 'Não Lançar';
 }
 
 export interface InboxMessage {

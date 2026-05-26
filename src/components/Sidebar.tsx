@@ -8,7 +8,6 @@ import {
   LayoutDashboard,
   CheckSquare,
   FolderOpen,
-  Folder,
   Settings,
   Link2,
 } from 'lucide-react';
@@ -43,22 +42,38 @@ export default function Sidebar() {
       </div>
       <div className="sb-hr" />
       <div className="sb-section">
-        <div className="sb-title">Projetos e pastas</div>
-        <Link href="/projects/gestao-de-fluxos" className={navLinkClass('/projects/gestao-de-fluxos', pathname)}>
+        <div className="sb-title">Navegação Principal</div>
+        <Link href="/clientes" className={navLinkClass('/clientes', pathname)}>
           <FolderOpen size={13} className="nav-icon" />
-          <span>GESTÃO DE FLUXOS</span>
+          <span>Clientes</span>
         </Link>
-        <Link href="/projects/fluxos-liberados" className={navLinkClass('/projects/fluxos-liberados', pathname)}>
+        <Link href="/projetos" className={navLinkClass('/projetos', pathname)}>
           <FolderOpen size={13} className="nav-icon" />
-          <span>FLUXOS LIBERADOS</span>
+          <span>Projetos</span>
         </Link>
+        <Link href="/equipe" className={navLinkClass('/equipe', pathname)}>
+          <FolderOpen size={13} className="nav-icon" />
+          <span>Equipe</span>
+        </Link>
+        <Link href="/ficha-cliente" className={navLinkClass('/ficha-cliente', pathname)}>
+          <FolderOpen size={13} className="nav-icon" />
+          <span>Ficha do Cliente</span>
+        </Link>
+      </div>
+      <div className="sb-hr" />
+      <div className="sb-section">
+        <div className="sb-title">Financeiro & Faturamento</div>
         <Link href="/faturamento" className={navLinkClass('/faturamento', pathname)}>
-          <Folder size={13} className="nav-icon" />
-          <span>FLUXOS EM ABERTO</span>
+          <FolderOpen size={13} className="nav-icon text-emerald-500" />
+          <span className="font-semibold text-emerald-400">Fluxo Financeiro</span>
         </Link>
-        <Link href="/projects/fluxos-concluidos" className={navLinkClass('/projects/fluxos-concluidos', pathname)}>
-          <FolderOpen size={13} className="nav-icon" />
-          <span>FLUXOS CONCLUÍDOS</span>
+        <Link href="/contratos" className={navLinkClass('/contratos', pathname)}>
+          <FolderOpen size={13} className="nav-icon text-sky-500" />
+          <span>Gestão de Contratos</span>
+        </Link>
+        <Link href="/cadastro-faturamento" className={navLinkClass('/cadastro-faturamento', pathname)}>
+          <FolderOpen size={13} className="nav-icon text-purple-500" />
+          <span>Perfil de Faturamento</span>
         </Link>
       </div>
       <div className="sb-hr" />
