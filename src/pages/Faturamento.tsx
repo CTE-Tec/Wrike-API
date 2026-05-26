@@ -29,7 +29,7 @@ export default function Faturamento() {
     load();
   }, [load]);
 
-  const handleUpdateTaskField = (taskId: string, field: keyof Task, value: any) => {
+  const handleUpdateTaskField = (taskId: string, field: keyof Task, value: Task[keyof Task]) => {
     setTasks(prev => prev.map(t => {
       if (t.id === taskId) {
         const updated = { ...t, [field]: value };
