@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { fetchProjects } from '../lib/data';
 import type { Project } from '../lib/types';
 import Layout from '../components/Layout';
@@ -19,17 +19,7 @@ export default function CadastroFaturamento() {
   const [isNewClient, setIsNewClient] = useState(true);
   const [notes, setNotes] = useState('');
 
-  useEffect(() => {
-    fetchProjects().then(p => {
-      setProjects(p);
-      if (p.length > 0) {
-        setSelectedProjectId(p[0].id);
-        loadProjectProfile(p[0]);
-      }
-    });
-  }, []);
-
-  const loadProjectProfile = (proj: Project) => {
+  const loadProjectProfile = useCallback((proj: Project) => {
     if (proj.billing_profile) {
       const bp = proj.billing_profile;
       setClientName(proj.client || '');
@@ -46,7 +36,17 @@ export default function CadastroFaturamento() {
       setIsNewClient(true);
       setNotes('');
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchProjects().then(p => {
+      setProjects(p);
+      if (p.length > 0) {
+        setSelectedProjectId(p[0].id);
+        loadProjectProfile(p[0]);
+      }
+    });
+  }, [loadProjectProfile]);
 
   const handleProjectChange = (id: string) => {
     setSelectedProjectId(id);
