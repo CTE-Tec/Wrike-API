@@ -20,28 +20,6 @@ export default function CadastroFaturamento() {
   const [notes, setNotes] = useState('');
 
   const loadProjectProfile = useCallback((proj: Project) => {
-
-  const loadProjects = () => {
-    fetchProjects().then(p => {
-      setProjects(p);
-      if (p.length > 0) {
-        if (!selectedProjectId) {
-          setSelectedProjectId(p[0].id);
-          loadProjectProfile(p[0]);
-        } else {
-          const currentProj = p.find(x => x.id === selectedProjectId);
-          if (currentProj) loadProjectProfile(currentProj);
-        }
-      }
-    });
-  };
-
-  useEffect(() => {
-    loadProjects();
-  }, []);
-
-  const loadProjectProfile = (proj: Project) => {
-    
     if (proj.billing_profile) {
       const bp = proj.billing_profile;
       setClientName(proj.client || '');
@@ -60,15 +38,24 @@ export default function CadastroFaturamento() {
     }
   }, []);
 
-  useEffect(() => {
+  const loadProjects = useCallback(() => {
     fetchProjects().then(p => {
       setProjects(p);
       if (p.length > 0) {
-        setSelectedProjectId(p[0].id);
-        loadProjectProfile(p[0]);
+        if (!selectedProjectId) {
+          setSelectedProjectId(p[0].id);
+          loadProjectProfile(p[0]);
+        } else {
+          const currentProj = p.find(x => x.id === selectedProjectId);
+          if (currentProj) loadProjectProfile(currentProj);
+        }
       }
     });
-  }, [loadProjectProfile]);
+  }, [selectedProjectId, loadProjectProfile]);
+
+  useEffect(() => {
+    loadProjects();
+  }, [loadProjects]);
 
   const handleProjectChange = (id: string) => {
     setSelectedProjectId(id);
