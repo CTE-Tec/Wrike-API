@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { fetchProjects } from '../lib/data';
+import { fetchProjects, saveBillingProfile } from '../lib/data';
 import type { Project } from '../lib/types';
 import Layout from '../components/Layout';
 import { Save, FileCheck2 } from 'lucide-react';
@@ -20,6 +20,28 @@ export default function CadastroFaturamento() {
   const [notes, setNotes] = useState('');
 
   const loadProjectProfile = useCallback((proj: Project) => {
+
+  const loadProjects = () => {
+    fetchProjects().then(p => {
+      setProjects(p);
+      if (p.length > 0) {
+        if (!selectedProjectId) {
+          setSelectedProjectId(p[0].id);
+          loadProjectProfile(p[0]);
+        } else {
+          const currentProj = p.find(x => x.id === selectedProjectId);
+          if (currentProj) loadProjectProfile(currentProj);
+        }
+      }
+    });
+  };
+
+  useEffect(() => {
+    loadProjects();
+  }, []);
+
+  const loadProjectProfile = (proj: Project) => {
+    
     if (proj.billing_profile) {
       const bp = proj.billing_profile;
       setClientName(proj.client || '');
@@ -54,10 +76,28 @@ export default function CadastroFaturamento() {
     if (p) loadProjectProfile(p);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    showToast('💾', 'Perfil Salvo com Sucesso', 'Dados de faturamento integrados ao fluxo do projeto.', 'tg');
+    if (!selectedProjectId) return;
+    
+    try {
+      const p = projects.find(x => x.id === selectedProjectId);
+      await saveBillingProfile({
+        id: p?.billing_profile?.id,
+        projectId: selectedProjectId,
+        measurementDates,
+        billingDates,
+        docsRequired,
+        isNewClient,
+        notes
+      });
+      showToast('💾', 'Perfil Salvo com Sucesso', 'Dados de faturamento integrados ao fluxo do projeto.', 'tg');
+      loadProjects();
+    } catch (error) {
+      showToast('❌', 'Erro ao Salvar Perfil', 'Ocorreu um problema ao salvar as informações no banco de dados.', 'tr');
+    }
   };
+
 
   return (
     <Layout breadcrumb={[

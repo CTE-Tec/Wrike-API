@@ -1,4 +1,4 @@
-// File: C:\Users\gugum\Wrike-API\src\app\faturamento\page.tsx
+// File: C:\Users\GustavoSantos\Downloads\Wrike-API\src\app\faturamento\page.tsx
 import * as entry from '../../../../src/app/faturamento/page.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 
