@@ -10,7 +10,13 @@ import {
   FolderOpen,
   Settings,
   Link2,
+  LogOut,
 } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { showToast } from './Toast';
+
+const useMockData = process.env.NEXT_PUBLIC_USE_MOCKS === 'true' || !supabase;
+
 
 function navLinkClass(path: string, currentPath: string) {
   return `nav-item${path === currentPath ? ' active' : ''}`;
@@ -87,7 +93,25 @@ export default function Sidebar() {
           <Link2 size={13} className="nav-icon" />
           <span>Integrações n8n</span>
         </Link>
+        
+        {/* Logout button */}
+        {!useMockData && (
+          <button 
+            onClick={async () => {
+              if (supabase) {
+                await supabase.auth.signOut();
+                showToast('🔑', 'Sessão Encerrada', 'Você saiu da sua conta com sucesso.', 'to');
+              }
+            }}
+            className="nav-item w-full text-left mt-2 border-t border-slate-700/20 pt-2 hover:text-red-400 flex items-center gap-1.5"
+            style={{ background: 'transparent', cursor: 'pointer' }}
+          >
+            <LogOut size={13} className="nav-icon text-red-500" />
+            <span className="text-red-400">Sair da Conta</span>
+          </button>
+        )}
       </div>
     </nav>
+
   );
 }
