@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { supabase } from './supabase';
 import { mockProjects, mockTasks, mockInboxMessages, mockIntegrations } from './mockData';
 import type { Project, Task, InboxMessage, Integration, BillingProfile, ContractDetails } from './types';

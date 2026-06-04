@@ -1,0 +1,17 @@
+{
+  "/_not-found/page": "/_not-found",
+  "/dashboard/page": "/dashboard",
+  "/cadastro-faturamento/page": "/cadastro-faturamento",
+  "/equipe/page": "/equipe",
+  "/clientes/page": "/clientes",
+  "/contratos/page": "/contratos",
+  "/inbox/page": "/inbox",
+  "/integrations/page": "/integrations",
+  "/faturamento/page": "/faturamento",
+  "/my-tasks/page": "/my-tasks",
+  "/projects/[folder]/page": "/projects/[folder]",
+  "/page": "/",
+  "/projetos/page": "/projetos",
+  "/ficha-cliente/page": "/ficha-cliente",
+  "/settings/page": "/settings"
+}

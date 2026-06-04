@@ -81,6 +81,7 @@ export default function CadastroFaturamento() {
       showToast('💾', 'Perfil Salvo com Sucesso', 'Dados de faturamento integrados ao fluxo do projeto.', 'tg');
       loadProjects();
     } catch (error) {
+      console.error(error);
       showToast('❌', 'Erro ao Salvar Perfil', 'Ocorreu um problema ao salvar as informações no banco de dados.', 'tr');
     }
   };

@@ -1,5 +1,17 @@
 {
-  "/projetos/page": "app/projetos/page.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/cadastro-faturamento/page": "app/cadastro-faturamento/page.js",
+  "/equipe/page": "app/equipe/page.js",
+  "/clientes/page": "app/clientes/page.js",
+  "/contratos/page": "app/contratos/page.js",
+  "/inbox/page": "app/inbox/page.js",
+  "/integrations/page": "app/integrations/page.js",
   "/faturamento/page": "app/faturamento/page.js",
-  "/contratos/page": "app/contratos/page.js"
+  "/my-tasks/page": "app/my-tasks/page.js",
+  "/projects/[folder]/page": "app/projects/[folder]/page.js",
+  "/page": "app/page.js",
+  "/projetos/page": "app/projetos/page.js",
+  "/ficha-cliente/page": "app/ficha-cliente/page.js",
+  "/settings/page": "app/settings/page.js"
 }

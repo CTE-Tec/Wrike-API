@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
@@ -15,7 +16,7 @@ interface LayoutProps {
 const useMockData = process.env.NEXT_PUBLIC_USE_MOCKS === 'true' || !supabase;
 
 export default function Layout({ breadcrumb, children, toolbar }: LayoutProps) {
-  const [session, setSession] = useState<any>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(!useMockData);
 
   useEffect(() => {
