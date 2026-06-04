@@ -30,7 +30,8 @@ export default function Login({ onLoginSuccess }: { onLoginSuccess: () => void }
         showToast('🔑', 'Acesso Concedido', 'Bem-vindo ao CTE Fluxo Financeiro!', 'tg');
         onLoginSuccess();
       }
-    } catch (err: any) {
+    } catch (err) {
+      console.error(err);
       showToast('❌', 'Erro', 'Ocorreu um erro ao processar o login.', 'tr');
     } finally {
       setLoading(false);
