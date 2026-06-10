@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { fetchProjects, fetchTasks, brl } from '../lib/data';
+import { fetchProjects, fetchTasks, brl, updateTaskFieldInDb, projectActionInDb, approveFlowInDb, applyReajusteInDb } from '../lib/data';
 import { showToast } from '../components/Toast';
 import type { Project, Task, TaskStatus } from '../lib/types';
 import { STATUS_LABELS } from '../lib/types';
@@ -12,7 +12,7 @@ import { Search, AlertOctagon, Check } from 'lucide-react';
 export default function Faturamento() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState<string>('SENNA-TOWER-01');
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [filter, setFilter] = useState<TaskStatus | 'all' | 'critical'>('all');
   const [search, setSearch] = useState('');
   const [showReajusteModal, setShowReajusteModal] = useState(false);
@@ -23,81 +23,64 @@ export default function Faturamento() {
     const [p, t] = await Promise.all([fetchProjects(), fetchTasks()]);
     setProjects(p);
     setTasks(t);
-  }, []);
+    if (p.length > 0 && !selectedProjectId) {
+      setSelectedProjectId(p[0].id);
+    }
+  }, [selectedProjectId]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  const handleUpdateTaskField = (taskId: string, field: keyof Task, value: Task[keyof Task]) => {
-    setTasks(prev => prev.map(t => {
-      if (t.id === taskId) {
-        const updated = { ...t, [field]: value };
-        if (field === 'status') {
-          // If status is cancelled or similar, adjust launch_navis
-          if (value === 'vis' && t.due_date && new Date(t.due_date).getFullYear() > 2030) {
-            updated.launch_navis = 'Não Lançar';
-          } else {
-            updated.launch_navis = 'Lançar';
-          }
-        }
-        return updated;
-      }
-      return t;
-    }));
-    showToast('✏️', 'Atividade atualizada', 'Campo alterado localmente.', 'to');
+  const handleUpdateTaskField = async (taskId: string, field: keyof Task, value: Task[keyof Task]) => {
+    try {
+      await updateTaskFieldInDb(taskId, field, value);
+      await load();
+      showToast('✏️', 'Atividade atualizada', 'Campo alterado e salvo no Supabase.', 'to');
+    } catch (e) {
+      console.error(e);
+      showToast('❌', 'Erro ao atualizar', 'Não foi possível salvar a alteração.', 'tr');
+    }
   };
 
-  const handleProjectAction = (projectId: string, action: 'medido' | 'faturado' | 'pago') => {
-    setTasks(prev => prev.map(t => {
-      if (t.project_id === projectId) {
-        if (action === 'medido' && t.status === 'fat') {
-          return { ...t, status: 'agu', status_nf: 'Enviar Nota' };
-        }
-        if (action === 'faturado' && t.status === 'agu') {
-          return { ...t, status: 'vis', status_nf: 'Nota Enviada' };
-        }
-        if (action === 'pago') {
-          return { ...t, status: 'apr', status_nf: 'Pago' };
-        }
-      }
-      return t;
-    }));
-
-    const labels = {
-      medido: 'Medições enviadas (status atualizado no Wrike)',
-      faturado: 'Notas faturadas (faturamento enviado)',
-      pago: 'Confirmado pagamento (fluxo concluído)'
-    };
-    showToast('⚡', 'Ação do Projeto Executada', labels[action], 'tg');
+  const handleProjectAction = async (projectId: string, action: 'medido' | 'faturado' | 'pago') => {
+    try {
+      await projectActionInDb(projectId, action);
+      await load();
+      
+      const labels = {
+        medido: 'Medições enviadas (status atualizado no Wrike)',
+        faturado: 'Notas faturadas (faturamento enviado)',
+        pago: 'Confirmado pagamento (fluxo concluído)'
+      };
+      showToast('⚡', 'Ação do Projeto Executada', labels[action], 'tg');
+    } catch (e) {
+      console.error(e);
+      showToast('❌', 'Erro ao executar ação', 'Não foi possível concluir a ação no projeto.', 'tr');
+    }
   };
 
-  const handleApproveFlow = (projectId: string) => {
-    setProjects(prev => prev.map(p => {
-      if (p.id === projectId) {
-        return { ...p, approved_by_owner: true };
-      }
-      return p;
-    }));
-    showToast('✅', 'Fluxo Aprovado', 'Líder de projeto aprovou o fluxo completo do mês.', 'tg');
+  const handleApproveFlow = async (projectId: string) => {
+    try {
+      await approveFlowInDb(projectId);
+      await load();
+      showToast('✅', 'Fluxo Aprovado', 'Líder de projeto aprovou o fluxo completo do mês.', 'tg');
+    } catch (e) {
+      console.error(e);
+      showToast('❌', 'Erro ao aprovar', 'Não foi possível aprovar o fluxo.', 'tr');
+    }
   };
 
-  const handleApplyReajuste = () => {
-    setTasks(prev => prev.map(t => {
-      if (t.project_id === selectedProjectId && t.etapa === 'Reajuste') {
-        const valAnterior = t.value;
-        const novoVal = Math.round(t.value * (1 + reajustePct / 100));
-        return {
-          ...t,
-          value_previous: valAnterior,
-          value: novoVal,
-          description: `${t.description} (Reajustado por ${reajusteIndex}: ${reajustePct}%)`
-        };
-      }
-      return t;
-    }));
-    setShowReajusteModal(false);
-    showToast('📈', 'Reajuste Aplicado', `Novos valores recalculados com base no ${reajusteIndex}.`, 'tg');
+  const handleApplyReajuste = async () => {
+    try {
+      await applyReajusteInDb(selectedProjectId, reajusteIndex, reajustePct);
+      await load();
+      setShowReajusteModal(false);
+      showToast('📈', 'Reajuste Aplicado', `Novos valores recalculados com base no ${reajusteIndex}.`, 'tg');
+    } catch (e) {
+      console.error(e);
+      showToast('❌', 'Erro ao aplicar reajuste', 'Não foi possível recalcular os valores.', 'tr');
+    }
   };
 
   const selectedProject = projects.find(p => p.id === selectedProjectId) || projects[0];

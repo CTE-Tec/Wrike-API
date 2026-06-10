@@ -34,14 +34,15 @@ export default function Dashboard() {
     : tasks.filter(t => filteredProjectIds.includes(t.project_id));
 
   // Unique owners list
-  const owners = Array.from(new Set(projects.map(p => p.owner)));
+  const owners = Array.from(new Set(projects.map(p => p.owner).filter(Boolean))) as string[];
 
-  // Invoicing Progress metrics
-  const totalPrevisto = filteredTasks.reduce((s, t) => s + t.value, 0);
-  const aFaturar = filteredTasks.filter(t => t.status === 'fat').reduce((s, t) => s + t.value, 0);
-  const medido = filteredTasks.filter(t => t.status === 'agu').reduce((s, t) => s + t.value, 0);
-  const faturado = filteredTasks.filter(t => t.status === 'vis').reduce((s, t) => s + t.value, 0);
-  const recebido = filteredTasks.filter(t => t.status === 'apr').reduce((s, t) => s + t.value, 0);
+  // Invoicing Progress metrics (only count tasks marked for launch in Navis)
+  const lancaveis = filteredTasks.filter(t => t.launch_navis === 'Lançar');
+  const totalPrevisto = lancaveis.reduce((s, t) => s + t.value, 0);
+  const aFaturar = lancaveis.filter(t => t.status === 'fat').reduce((s, t) => s + t.value, 0);
+  const medido = lancaveis.filter(t => t.status === 'agu').reduce((s, t) => s + t.value, 0);
+  const faturado = lancaveis.filter(t => t.status === 'vis').reduce((s, t) => s + t.value, 0);
+  const recebido = lancaveis.filter(t => t.status === 'apr').reduce((s, t) => s + t.value, 0);
 
   // SLA calculations
   const totalFlows = filteredProjects.length;
@@ -64,7 +65,7 @@ export default function Dashboard() {
 
   // Projects value comparison
   const projectComparisonData = filteredProjects.map(p => {
-    const pTasks = tasks.filter(t => t.project_id === p.id);
+    const pTasks = tasks.filter(t => t.project_id === p.id && t.launch_navis === 'Lançar');
     return {
       name: p.name.length > 20 ? p.name.slice(0, 20) + '…' : p.name,
       'Original Contrato': p.contract_original_value,
