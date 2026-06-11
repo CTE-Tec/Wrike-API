@@ -70,6 +70,12 @@ export interface Task {
   value_previous: number | null;
   gap_justification: string | null;
   launch_navis: 'Lançar' | 'Não Lançar';
+  month_reference?: string;
+  line_color?: string | null;
+  change_indicator?: string | null;
+  text_style?: string | null;
+  additive_type?: string | null;
+  new_flag?: string | null;
 }
 
 export interface PreviousFlowRow {
@@ -87,6 +93,12 @@ export interface PreviousFlowRow {
   value_previous: number | null;
   gap_justification: string | null;
   launch_navis: 'Lançar' | 'Não Lançar';
+  month_reference?: string;
+  line_color?: string | null;
+  change_indicator?: string | null;
+  text_style?: string | null;
+  additive_type?: string | null;
+  new_flag?: string | null;
 }
 
 export interface RawTaskRow {

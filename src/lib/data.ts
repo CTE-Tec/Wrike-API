@@ -108,6 +108,12 @@ function mapTask(t: any): Task {
     value_previous: t.valor_anterior ? Number(t.valor_anterior) : null,
     gap_justification: t.justificativa_gap,
     launch_navis: t.lancar_navis === 'Não Lançar' ? 'Não Lançar' : 'Lançar',
+    month_reference: t.mes_referencia,
+    line_color: t.cor_linha,
+    change_indicator: t.indicador_mudanca,
+    text_style: t.estilo_texto,
+    additive_type: t.tipo_aditivo,
+    new_flag: t.flag_novo,
   };
 }
 

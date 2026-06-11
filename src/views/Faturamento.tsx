@@ -37,6 +37,29 @@ function num(value: number | null | undefined): string {
   return value == null ? '—' : value.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
 }
 
+const currentMonthColumns = ['B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
+const tasksColumns = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
+
+function excelRowClass(task: Task): string {
+  const classes = ['excel-data-row'];
+  if (task.line_color === 'azul' || task.status_nf === 'Enviar Nota') classes.push('excel-row-blue');
+  if (task.change_indicator === 'verde' || task.new_flag === 'NOVO') classes.push('excel-row-green');
+  if (task.launch_navis === 'Não Lançar' || task.text_style === 'tachado') classes.push('excel-row-disabled');
+  return classes.join(' ');
+}
+
+function excelCellClass(task: Task, column: 'date' | 'value' | 'gap' | 'launch' | 'status' | 'activity' | 'etapa'): string {
+  const classes = ['excel-cell'];
+  if (column === 'date' && task.date_previous) classes.push('excel-cell-changed');
+  if (column === 'value' && task.value_previous != null) classes.push('excel-cell-changed');
+  if (column === 'gap' && task.gap_justification === 'Justificar GAP no Wrike') classes.push('excel-cell-gap');
+  if (column === 'launch' && task.launch_navis === 'Não Lançar') classes.push('excel-cell-muted');
+  if (column === 'status' && task.status_nf === 'Enviar Nota') classes.push('excel-cell-send-note');
+  if (column === 'activity' && task.additive_type) classes.push('excel-cell-additive');
+  if (column === 'etapa' && task.change_indicator === 'verde') classes.push('excel-cell-new');
+  return classes.join(' ');
+}
+
 export default function Faturamento() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -399,6 +422,11 @@ export default function Faturamento() {
           <div className="overflow-x-auto">
             <table className="min-w-[1280px] text-xs">
               <thead>
+                <tr className="excel-column-row">
+                  {tasksColumns.map((column) => (
+                    <th key={column}>{column}</th>
+                  ))}
+                </tr>
                 <tr className="bg-[#d9ead3] border-b border-[var(--border2)]">
                   {['Nome', 'Data inicial', 'Vencimento', 'GAP', 'Status', 'Responsável', 'Valor Contratado', '$ Valor Planejado', 'Diferença $', 'Consultor', 'Analista', 'Estagiário'].map((header) => (
                     <th key={header} className="py-2.5">{header}</th>
@@ -521,71 +549,76 @@ export default function Faturamento() {
       </div>
 
       {/* Main Excel-like Spreadsheet Table */}
-      <div className="mx-4 bg-white border border-[var(--border)] rounded-xl shadow-sm overflow-hidden mb-8">
+      <div className="mx-4 bg-white border border-[var(--border)] rounded-xl shadow-sm overflow-hidden mb-8 excel-sheet">
         <div className="overflow-x-auto">
-          <table className="w-full text-xs">
+          <table className="min-w-[1320px] text-xs excel-grid">
             <thead>
+              <tr className="excel-column-row">
+                <th className="excel-corner" />
+                {currentMonthColumns.map((column) => (
+                  <th key={column}>{column}</th>
+                ))}
+              </tr>
               <tr className="bg-[var(--surface3)] border-b border-[var(--border2)]">
-                <th className="py-2.5 pl-4 w-28">Etapa</th>
-                <th className="py-2.5">Nome da Atividade / Código Equipe</th>
-                <th className="py-2.5 text-center w-20">N.º Navis</th>
-                <th className="py-2.5 text-right w-28">Valor</th>
-                <th className="py-2.5 text-center w-36">Data de Conclusão</th>
-                <th className="py-2.5 text-center w-24">Status NF</th>
+                <th className="excel-row-header">31</th>
+                <th className="py-2.5 w-28">Etapa</th>
+                <th className="py-2.5 min-w-[380px]">Atividade</th>
+                <th className="py-2.5 text-center w-24">N.º Navis</th>
+                <th className="py-2.5 text-right w-32">Valor</th>
+                <th className="py-2.5 text-center w-36">Data</th>
+                <th className="py-2.5 text-center w-28">Status NF</th>
                 <th className="py-2.5 text-center w-32">Pagamento</th>
-                <th className="py-2.5 text-center w-28">Data Anterior</th>
-                <th className="py-2.5 text-right w-28">Valor Anterior</th>
-                <th className="py-2.5 w-40 text-center">Justificativa GAP</th>
-                <th className="py-2.5 text-center w-24">Lançar Navis</th>
+                <th className="py-2.5 text-center w-32">Data Anterior</th>
+                <th className="py-2.5 text-right w-32">Valor Anterior</th>
+                <th className="py-2.5 w-44 text-center">Justificativa GAP</th>
+                <th className="py-2.5 text-center w-28">Lançar Navis</th>
               </tr>
             </thead>
             <tbody>
-              {filteredTasks.map((t) => {
-                // Formatting classes based on status / index sheet
-                const isNewOrReajuste = t.etapa === 'Reajuste';
-                const isEnviarNota = t.status_nf === 'Enviar Nota' || t.status === 'fat';
-                const isNotLaunched = t.launch_navis === 'Não Lançar';
-                
-                let rowBg = '';
-                if (isNewOrReajuste) rowBg = 'bg-emerald-500/10 hover:bg-emerald-500/15'; // Green row
-                else if (isEnviarNota) rowBg = 'bg-cyan-500/10 hover:bg-cyan-500/15'; // Blue row
-                else if (isNotLaunched) rowBg = 'opacity-60 bg-gray-50'; // Dimmed row
-
+              {filteredTasks.map((t, index) => {
                 return (
-                  <tr key={t.id} className={`border-b border-[var(--border)] transition-colors ${rowBg}`}>
+                  <tr key={t.id} className={excelRowClass(t)}>
+                    <td className="excel-row-number">{index + 32}</td>
                     {/* Etapa */}
-                    <td className="py-2 pl-4 font-bold text-[var(--text2)]">{t.etapa}</td>
+                    <td className={excelCellClass(t, 'etapa')}>
+                      <span className="font-bold text-[var(--text2)]">{t.etapa}</span>
+                      {t.new_flag === 'NOVO' && <span className="excel-formula-chip">NOVO</span>}
+                    </td>
                     
                     {/* Atividade & Team code label */}
-                    <td className="py-2 font-medium">
-                      <div className="text-[var(--text)]">{t.name}</div>
-                      <div className="text-[10px] text-[var(--muted)]">
-                        Equipe: <span className="font-semibold text-sky-800">{t.name.split('-')[3] || '—'}</span>
-                      </div>
+                    <td className={excelCellClass(t, 'activity')}>
+                      <div className="excel-task-title">{t.name}</div>
+                      {(t.additive_type || t.line_color || t.change_indicator) && (
+                        <div className="excel-formula-notes">
+                          {t.additive_type && <span>{t.additive_type}</span>}
+                          {t.line_color === 'azul' && <span>Mês atual</span>}
+                          {t.change_indicator === 'verde' && <span>Item novo</span>}
+                        </div>
+                      )}
                     </td>
                     
                     {/* N.º Navis */}
-                    <td className="py-2 text-center mono font-semibold">{t.navis_num}</td>
+                    <td className="excel-cell text-center mono font-semibold">{t.navis_num}</td>
                     
                     {/* Valor */}
-                    <td className="py-2 text-right mono font-bold text-emerald-700">{brl(t.value)}</td>
+                    <td className={`${excelCellClass(t, 'value')} text-right mono font-bold text-emerald-700`}>{brl(t.value)}</td>
                     
                     {/* Data Conclusão */}
-                    <td className="py-2 text-center">
+                    <td className={`${excelCellClass(t, 'date')} text-center`}>
                       <input 
                         type="date"
                         value={t.due_date ? t.due_date.split('T')[0] : ''}
                         onChange={(e) => handleUpdateTaskField(t.id, 'due_date', e.target.value)}
-                        className="bg-transparent border border-transparent hover:border-gray-300 rounded px-1 text-[11px] text-center"
+                        className="excel-input"
                       />
                     </td>
                     
                     {/* Status NF */}
-                    <td className="py-2 text-center">
+                    <td className={`${excelCellClass(t, 'status')} text-center`}>
                       <select 
                         value={t.status_nf}
                         onChange={(e) => handleUpdateTaskField(t.id, 'status_nf', e.target.value)}
-                        className="bg-transparent border border-transparent hover:border-gray-300 rounded text-[11px]"
+                        className="excel-select"
                       >
                         <option value="—">—</option>
                         <option value="Pago">Pago</option>
@@ -596,26 +629,26 @@ export default function Faturamento() {
                     </td>
                     
                     {/* Pagamento */}
-                    <td className="py-2 text-center font-bold">
+                    <td className="excel-cell text-center font-bold">
                       {t.pagamento === 'Nota Atrasada' ? (
-                        <span className="text-red-600 text-[10px] uppercase animate-pulse">⚠️ Nota Atrasada</span>
+                        <span className="excel-alert-text">Nota Atrasada</span>
                       ) : (
-                        <span className="text-[var(--muted)]">—</span>
+                        <span className="text-[var(--muted)]">{t.pagamento || '—'}</span>
                       )}
                     </td>
                     
                     {/* Data Anterior */}
-                    <td className="py-2 text-center text-slate-500 mono">{t.date_previous || '—'}</td>
+                    <td className="excel-cell text-center text-slate-500 mono">{formatDate(t.date_previous)}</td>
                     
                     {/* Valor Anterior */}
-                    <td className="py-2 text-right text-slate-500 mono">{t.value_previous ? brl(t.value_previous) : '—'}</td>
+                    <td className="excel-cell text-right text-slate-500 mono">{t.value_previous ? brl(t.value_previous) : '—'}</td>
                     
                     {/* Justificativa GAP */}
-                    <td className="py-2 text-center px-1">
+                    <td className={`${excelCellClass(t, 'gap')} text-center px-1`}>
                       <select 
                         value={t.gap_justification || ''}
                         onChange={(e) => handleUpdateTaskField(t.id, 'gap_justification', e.target.value)}
-                        className="bg-white border border-gray-300 rounded px-1 py-0.5 text-[10px] w-full max-w-[150px] outline-none"
+                        className="excel-select w-full"
                       >
                         <option value="">Nenhuma</option>
                         <option value="Atraso do cliente na aprovação">Atraso cliente na aprovação</option>
@@ -626,14 +659,8 @@ export default function Faturamento() {
                     </td>
                     
                     {/* Lançar Navis */}
-                    <td className="py-2 text-center">
-                      <span className={`font-semibold px-2 py-0.5 rounded text-[10px] ${
-                        t.launch_navis === 'Lançar' 
-                          ? 'bg-emerald-100 text-emerald-800' 
-                          : 'bg-gray-100 text-gray-600'
-                      }`}>
-                        {t.launch_navis}
-                      </span>
+                    <td className={`${excelCellClass(t, 'launch')} text-center`}>
+                      <span className="excel-status-chip">{t.launch_navis}</span>
                     </td>
                   </tr>
                 );
