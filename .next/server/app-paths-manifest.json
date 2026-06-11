@@ -1,7 +1,3 @@
 {
-  "/page": "app/page.js",
-  "/faturamento/page": "app/faturamento/page.js",
-  "/contratos/page": "app/contratos/page.js",
-  "/cadastro-faturamento/page": "app/cadastro-faturamento/page.js",
-  "/ficha-cliente/page": "app/ficha-cliente/page.js"
+  "/faturamento/page": "app/faturamento/page.js"
 }

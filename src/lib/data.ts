@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { supabase } from './supabase';
 import { mockProjects, mockTasks, mockInboxMessages, mockIntegrations } from './mockData';
-import type { Project, Task, TaskStatus, InboxMessage, Integration, BillingProfile, ContractDetails } from './types';
+import type { Project, Task, TaskStatus, InboxMessage, Integration, BillingProfile, ContractDetails, PreviousFlowRow, RawTaskRow } from './types';
 
 // Set strictly to false only if explicitly configured as 'false'
 const useMockData = process.env.NEXT_PUBLIC_USE_MOCKS !== 'false';
@@ -111,6 +111,51 @@ function mapTask(t: any): Task {
   };
 }
 
+function normalizeLaunchNavis(value: unknown): 'Lançar' | 'Não Lançar' {
+  const text = String(value ?? '').trim();
+  return text === 'Não Lançar' || text === 'Nao Lancar' ? 'Não Lançar' : 'Lançar';
+}
+
+function mapPreviousFlowRow(row: any): PreviousFlowRow {
+  return {
+    id: row.id,
+    project_id: row.projeto_id || row.project_id,
+    month: row.mes_referencia || row.snapshot_month || '',
+    etapa: row.etapa || '',
+    atividade: row.atividade || row.name || '',
+    navis_num: row.numero_navis || row.navis_num || '',
+    value: Number(row.valor ?? row.value ?? 0),
+    date: row.data || row.due_date || null,
+    status_nf: row.status_nf || '—',
+    pagamento: row.pagamento || '—',
+    date_previous: row.data_anterior || row.date_previous || null,
+    value_previous: row.valor_anterior != null ? Number(row.valor_anterior) : row.value_previous != null ? Number(row.value_previous) : null,
+    gap_justification: row.justificativa_gap || row.gap_justification || null,
+    launch_navis: normalizeLaunchNavis(row.lancar_navis || row.launch_navis),
+  };
+}
+
+function mapRawTaskRow(row: any): RawTaskRow {
+  const contracted = row.valor_contratado ?? row.contracted_value;
+  const planned = row.valor_planejado ?? row.valor ?? row.value ?? row.planned_value;
+  return {
+    id: row.id,
+    project_id: row.projeto_id || row.project_id,
+    name: row.nome || row.atividade || row.name || '',
+    start_date: row.data_inicial || row.start_date || null,
+    due_date: row.vencimento || row.data_conclusao || row.due_date || null,
+    gap: row.gap || row.gap_justification || null,
+    status: row.status || row.status_nf || '',
+    responsible: row.responsavel || row.responsible || row.owner || '',
+    contracted_value: contracted != null ? Number(contracted) : null,
+    planned_value: planned != null ? Number(planned) : null,
+    difference: row.diferenca != null ? Number(row.diferenca) : row.diferenca_valor_wrike != null ? Number(row.diferenca_valor_wrike) : contracted != null && planned != null ? Number(contracted) - Number(planned) : null,
+    consultant_hours: row.consultor != null ? Number(row.consultor) : row.horas_consultor != null ? Number(row.horas_consultor) : null,
+    analyst_hours: row.analista != null ? Number(row.analista) : row.horas_analista != null ? Number(row.horas_analista) : null,
+    intern_hours: row.estagiario != null ? Number(row.estagiario) : row.horas_estagiario != null ? Number(row.horas_estagiario) : null,
+  };
+}
+
 export async function fetchProjects(): Promise<Project[]> {
   if (useMockData) {
     return mockProjects;
@@ -171,6 +216,100 @@ export async function fetchTasksByProject(projectId: string): Promise<Task[]> {
     throw error;
   }
   return (data ?? []).map(mapTask);
+}
+
+export async function fetchPreviousFlowRows(projectId: string): Promise<PreviousFlowRow[]> {
+  if (useMockData) {
+    return mockTasks
+      .filter((task) => task.project_id === projectId)
+      .map((task) => mapPreviousFlowRow({
+        id: `prev-${task.id}`,
+        project_id: task.project_id,
+        snapshot_month: task.date_previous ? task.date_previous.slice(0, 7) : '2026-02',
+        name: task.name,
+        etapa: task.etapa,
+        navis_num: task.navis_num,
+        value: task.value_previous ?? task.value,
+        due_date: task.date_previous ?? task.due_date,
+        status_nf: task.status_nf,
+        pagamento: task.pagamento,
+        gap_justification: task.gap_justification,
+        launch_navis: task.launch_navis,
+      }));
+  }
+
+  if (!supabase) throw new Error('Supabase client is not initialized.');
+
+  const { data, error } = await supabase
+    .from('fluxo_mes_anterior')
+    .select('*')
+    .eq('projeto_id', projectId)
+    .order('data', { ascending: true });
+
+  if (!error) return (data ?? []).map(mapPreviousFlowRow);
+
+  const fallback = await supabase
+    .from('task_snapshots')
+    .select('*')
+    .eq('project_id', projectId)
+    .order('due_date', { ascending: true });
+
+  if (fallback.error) {
+    console.error('Supabase previous flow fetch failed:', error, fallback.error);
+    throw fallback.error;
+  }
+
+  return (fallback.data ?? []).map(mapPreviousFlowRow);
+}
+
+export async function fetchRawTaskRows(projectId: string): Promise<RawTaskRow[]> {
+  if (useMockData) {
+    return mockTasks
+      .filter((task) => task.project_id === projectId)
+      .map((task) => mapRawTaskRow({
+        id: task.id,
+        project_id: task.project_id,
+        name: task.name,
+        start_date: task.created_at,
+        due_date: task.due_date,
+        gap_justification: task.gap_justification,
+        status: task.status_nf,
+        responsible: task.responsible,
+        contracted_value: task.value_previous ?? task.value,
+        planned_value: task.value,
+      }));
+  }
+
+  if (!supabase) throw new Error('Supabase client is not initialized.');
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('projeto_id', projectId)
+    .order('vencimento', { ascending: true, nullsFirst: false });
+
+  if (!error && (data ?? []).length > 0) return (data ?? []).map(mapRawTaskRow);
+
+  const fallback = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('project_id', projectId)
+    .order('due_date', { ascending: true, nullsFirst: false });
+
+  if (!fallback.error && (fallback.data ?? []).length > 0) return (fallback.data ?? []).map(mapRawTaskRow);
+
+  const flowFallback = await supabase
+    .from('vw_fluxo_completo')
+    .select('*')
+    .eq('projeto_id', projectId)
+    .order('data_conclusao', { ascending: true, nullsFirst: false });
+
+  if (flowFallback.error) {
+    console.error('Supabase raw tasks fetch failed:', error, fallback.error, flowFallback.error);
+    throw flowFallback.error;
+  }
+
+  return (flowFallback.data ?? []).map(mapRawTaskRow);
 }
 
 export async function updateTaskStatus(taskId: string, status: Task['status']): Promise<void> {
@@ -288,6 +427,8 @@ export async function approveFlowInDb(projectId: string): Promise<void> {
 }
 
 export async function applyReajusteInDb(projectId: string, indexName: string, percentage: number): Promise<void> {
+  void indexName;
+
   if (useMockData) return;
   if (!supabase) throw new Error('Supabase client is not initialized.');
   

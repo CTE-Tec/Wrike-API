@@ -5,7 +5,7 @@ import { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
-import Login from '../pages/Login';
+import Login from '../views/Login';
 
 interface LayoutProps {
   breadcrumb: { label: string; active?: boolean }[];

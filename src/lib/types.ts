@@ -72,6 +72,40 @@ export interface Task {
   launch_navis: 'Lançar' | 'Não Lançar';
 }
 
+export interface PreviousFlowRow {
+  id: string;
+  project_id: string;
+  month: string;
+  etapa: string;
+  atividade: string;
+  navis_num: string;
+  value: number;
+  date: string | null;
+  status_nf: string;
+  pagamento: string;
+  date_previous: string | null;
+  value_previous: number | null;
+  gap_justification: string | null;
+  launch_navis: 'Lançar' | 'Não Lançar';
+}
+
+export interface RawTaskRow {
+  id: string;
+  project_id: string;
+  name: string;
+  start_date: string | null;
+  due_date: string | null;
+  gap: string | null;
+  status: string;
+  responsible: string;
+  contracted_value: number | null;
+  planned_value: number | null;
+  difference: number | null;
+  consultant_hours: number | null;
+  analyst_hours: number | null;
+  intern_hours: number | null;
+}
+
 export interface InboxMessage {
   id: string;
   title: string;

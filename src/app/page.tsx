@@ -1,5 +1,5 @@
-import Search from '../../src/pages/Search';
+import { redirect } from 'next/navigation';
 
 export default function HomePage() {
-  return <Search />;
+  redirect('/faturamento');
 }

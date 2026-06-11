@@ -1,18 +1,49 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { fetchProjects, fetchTasks, brl, updateTaskFieldInDb, projectActionInDb, approveFlowInDb, applyReajusteInDb } from '../lib/data';
+import { fetchProjects, fetchTasks, fetchPreviousFlowRows, fetchRawTaskRows, brl, updateTaskFieldInDb, projectActionInDb, approveFlowInDb, applyReajusteInDb } from '../lib/data';
 import { showToast } from '../components/Toast';
-import type { Project, Task, TaskStatus } from '../lib/types';
+import type { Project, Task, TaskStatus, PreviousFlowRow, RawTaskRow } from '../lib/types';
 import { STATUS_LABELS } from '../lib/types';
 import Layout from '../components/Layout';
 import Modal from '../components/Modal';
-import { Search, AlertOctagon, Check } from 'lucide-react';
+import { Search, AlertOctagon, Check, FileSpreadsheet } from 'lucide-react';
+
+type WorkbookTab = 'instrucoes' | 'tasks' | 'mes-atual' | 'mes-anterior' | 'planejado';
+
+const workbookTabs: { id: WorkbookTab; label: string }[] = [
+  { id: 'instrucoes', label: 'INSTRUÇÕES' },
+  { id: 'tasks', label: 'Tasks' },
+  { id: 'mes-atual', label: 'Mês Atual' },
+  { id: 'mes-anterior', label: 'Mês Anterior' },
+  { id: 'planejado', label: 'Planejado x Contratado' },
+];
+
+const instructions = [
+  'Salvar o último fluxo com data atualizada na pasta do projeto, ou baixar a última versão do fluxo no Autodoc Qualidade quando for a primeira emissão.',
+  'Visualizar o projeto no Wrike no formato Table/Tabela. Células sem valor financeiro devem ficar vazias, exceto valores de Reajuste com 0 ou valor do reajuste.',
+  'Filtrar atividades por Campos Personalizados > Valor > Tem essa identificação e manter a ordem: Nome, Início, Prazo, GAP, Status, Responsável, Valor Contratado, $ Valor Planejado.',
+  'Exportar a tabela do Wrike para Excel e copiar os valores para a aba Tasks sem alterar a ordem das colunas.',
+];
+
+function formatDate(value: string | null | undefined): string {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString('pt-BR');
+}
+
+function num(value: number | null | undefined): string {
+  return value == null ? '—' : value.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+}
 
 export default function Faturamento() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [previousFlowRows, setPreviousFlowRows] = useState<PreviousFlowRow[]>([]);
+  const [rawTaskRows, setRawTaskRows] = useState<RawTaskRow[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+  const [activeSheet, setActiveSheet] = useState<WorkbookTab>('mes-atual');
   const [filter, setFilter] = useState<TaskStatus | 'all' | 'critical'>('all');
   const [search, setSearch] = useState('');
   const [showReajusteModal, setShowReajusteModal] = useState(false);
@@ -31,6 +62,38 @@ export default function Faturamento() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (!selectedProjectId) return;
+
+    let cancelled = false;
+
+    async function loadWorkbookSheets() {
+      try {
+        const [previousRows, rawRows] = await Promise.all([
+          fetchPreviousFlowRows(selectedProjectId),
+          fetchRawTaskRows(selectedProjectId),
+        ]);
+
+        if (!cancelled) {
+          setPreviousFlowRows(previousRows);
+          setRawTaskRows(rawRows);
+        }
+      } catch (e) {
+        console.error(e);
+        if (!cancelled) {
+          setPreviousFlowRows([]);
+          setRawTaskRows([]);
+        }
+      }
+    }
+
+    loadWorkbookSheets();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedProjectId]);
 
   const handleUpdateTaskField = async (taskId: string, field: keyof Task, value: Task[keyof Task]) => {
     try {
@@ -91,6 +154,19 @@ export default function Faturamento() {
 
   // Filter tasks belonging to current project
   const projectTasks = tasks.filter(t => t.project_id === selectedProject.id);
+
+  const plannedComparisonRows = rawTaskRows.reduce((acc, row) => {
+    const sourceDate = row.due_date || row.start_date;
+    const month = sourceDate ? sourceDate.slice(0, 7) : 'Sem data';
+    const existing = acc.get(month) || { month, planned: 0, contract: selectedProject.contracted_value, differencePct: 0 };
+    existing.planned += row.planned_value ?? 0;
+    existing.contract = selectedProject.contracted_value;
+    existing.differencePct = existing.contract ? 1 - existing.planned / existing.contract + selectedProject.margin_pct / 100 : 0;
+    acc.set(month, existing);
+    return acc;
+  }, new Map<string, { month: string; planned: number; contract: number; differencePct: number }>());
+
+  const plannedRows = Array.from(plannedComparisonRows.values()).sort((a, b) => a.month.localeCompare(b.month));
 
   // Apply filters
   const filteredTasks = projectTasks.filter(t => {
@@ -279,6 +355,145 @@ export default function Faturamento() {
         </div>
       </div>
 
+      {/* Excel Workbook Tabs */}
+      <div className="mx-4 mb-4 bg-white border border-[var(--border)] rounded-lg shadow-sm overflow-hidden">
+        <div className="flex items-center gap-1 overflow-x-auto bg-[#eef3f7] px-2 pt-2 border-b border-[var(--border)]">
+          {workbookTabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveSheet(tab.id)}
+              className={`inline-flex items-center gap-2 px-3 py-2 text-xs font-bold border border-b-0 rounded-t-md whitespace-nowrap transition ${
+                activeSheet === tab.id
+                  ? 'bg-white text-[var(--text)] border-[var(--border)]'
+                  : 'bg-[#dfe7ee] text-[var(--text2)] border-transparent hover:bg-white/70'
+              }`}
+            >
+              <FileSpreadsheet size={14} />
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {activeSheet === 'instrucoes' && (
+        <div className="mx-4 bg-white border border-[var(--border)] rounded-xl shadow-sm overflow-hidden mb-8">
+          <div className="bg-[#d9ead3] px-4 py-3 border-b border-[var(--border)]">
+            <h3 className="text-sm font-black text-[var(--text)]">INSTRUÇÕES DE USO DO FLUXO</h3>
+            <p className="text-xs text-[var(--text2)]">Revisão 17 | 19/Setembro/2023</p>
+          </div>
+          <table className="w-full text-xs">
+            <tbody>
+              {instructions.map((instruction, index) => (
+                <tr key={instruction} className="border-b border-[var(--border)]">
+                  <td className="w-24 bg-[#f7fbf4] text-center font-black text-[var(--cte2)]">{String(index + 1).padStart(2, '0')}.</td>
+                  <td className="leading-relaxed whitespace-pre-wrap">{instruction}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {activeSheet === 'tasks' && (
+        <div className="mx-4 bg-white border border-[var(--border)] rounded-xl shadow-sm overflow-hidden mb-8">
+          <div className="overflow-x-auto">
+            <table className="min-w-[1280px] text-xs">
+              <thead>
+                <tr className="bg-[#d9ead3] border-b border-[var(--border2)]">
+                  {['Nome', 'Data inicial', 'Vencimento', 'GAP', 'Status', 'Responsável', 'Valor Contratado', '$ Valor Planejado', 'Diferença $', 'Consultor', 'Analista', 'Estagiário'].map((header) => (
+                    <th key={header} className="py-2.5">{header}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rawTaskRows.map((row) => (
+                  <tr key={row.id} className="border-b border-[var(--border)] hover:bg-[var(--surface2)]">
+                    <td className="min-w-[360px] font-medium">{row.name}</td>
+                    <td>{formatDate(row.start_date)}</td>
+                    <td>{formatDate(row.due_date)}</td>
+                    <td className="min-w-[180px]">{row.gap || ''}</td>
+                    <td>{row.status}</td>
+                    <td className="min-w-[260px]">{row.responsible}</td>
+                    <td className="text-right mono">{row.contracted_value == null ? '' : brl(row.contracted_value)}</td>
+                    <td className="text-right mono">{row.planned_value == null ? '' : brl(row.planned_value)}</td>
+                    <td className="text-right mono">{row.difference == null ? '' : brl(row.difference)}</td>
+                    <td className="text-right mono">{num(row.consultant_hours)}</td>
+                    <td className="text-right mono">{num(row.analyst_hours)}</td>
+                    <td className="text-right mono">{num(row.intern_hours)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {activeSheet === 'mes-anterior' && (
+        <div className="mx-4 bg-white border border-[var(--border)] rounded-xl shadow-sm overflow-hidden mb-8">
+          <div className="overflow-x-auto">
+            <table className="min-w-[1180px] text-xs">
+              <thead>
+                <tr className="bg-[#d9ead3] border-b border-[var(--border2)]">
+                  {['ETAPA', 'ATIVIDADE', 'N.° Navis', 'VALOR', 'DATA', 'STATUS NF', 'PAGAMENTO', 'DATA ANTERIOR', 'VALOR ANTERIOR', 'Justificativa GAP', 'LANÇAR NAVIS'].map((header) => (
+                    <th key={header} className="py-2.5">{header}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {previousFlowRows.map((row) => (
+                  <tr key={row.id} className={`border-b border-[var(--border)] hover:bg-[var(--surface2)] ${row.launch_navis === 'Não Lançar' ? 'opacity-60' : ''}`}>
+                    <td className="font-bold">{row.etapa}</td>
+                    <td className="min-w-[380px] font-medium">{row.atividade}</td>
+                    <td className="text-center mono">{row.navis_num}</td>
+                    <td className="text-right mono font-bold">{brl(row.value)}</td>
+                    <td className="text-center">{formatDate(row.date)}</td>
+                    <td className="text-center">{row.status_nf}</td>
+                    <td className="text-center">{row.pagamento === '—' ? '' : row.pagamento}</td>
+                    <td className="text-center">{formatDate(row.date_previous)}</td>
+                    <td className="text-right mono">{row.value_previous == null ? '' : brl(row.value_previous)}</td>
+                    <td className="min-w-[180px]">{row.gap_justification || ''}</td>
+                    <td className="text-center font-semibold">{row.launch_navis}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {activeSheet === 'planejado' && (
+        <div className="mx-4 bg-white border border-[var(--border)] rounded-xl shadow-sm overflow-hidden mb-8">
+          <div className="bg-[#d9ead3] px-4 py-2 text-xs font-bold text-[var(--text)] border-b border-[var(--border)]">
+            Aba oculta no Excel: Planejado x Contratado
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-[760px] text-xs">
+              <thead>
+                <tr className="bg-[var(--surface3)] border-b border-[var(--border2)]">
+                  {['MÊS', 'Valor Planejado', 'Valor Total do Contrato', 'Coluna2', 'Coluna1', 'Diferença %'].map((header) => (
+                    <th key={header} className="py-2.5">{header}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {plannedRows.map((row) => (
+                  <tr key={row.month} className="border-b border-[var(--border)] hover:bg-[var(--surface2)]">
+                    <td className="font-bold">{row.month}</td>
+                    <td className="text-right mono">{brl(row.planned)}</td>
+                    <td className="text-right mono">{brl(row.contract)}</td>
+                    <td />
+                    <td />
+                    <td className="text-right mono font-bold">{(row.differencePct * 100).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {activeSheet === 'mes-atual' && (
+      <>
       {/* View Filters toolbar */}
       <div className="vtoolbar mx-4 mb-4 rounded-lg border border-[var(--border)]">
         <div className="flex gap-1 flex-wrap">
@@ -427,6 +642,8 @@ export default function Faturamento() {
           </table>
         </div>
       </div>
+      </>
+      )}
 
       {/* Reajuste Modal */}
       <Modal
