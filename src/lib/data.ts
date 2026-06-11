@@ -103,7 +103,7 @@ function mapTask(t: any): Task {
     status: mapTaskStatus(t.status_nf),
     responsible: '',
     email: '',
-    due_date: t.data_conclusao || t.due_date,
+    due_date: t.data_conclusao_atividade || t.data_conclusao || t.data || t.due_date,
     created_at: t.created_at || new Date().toISOString(),
     etapa: t.etapa || '',
     navis_num: t.numero_navis || t.navis_num || '',
