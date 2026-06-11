@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { fetchProjects, fetchTasks, fetchPreviousFlowRows, fetchRawTaskRows, brl, updateTaskFieldInDb, projectActionInDb, approveFlowInDb, applyReajusteInDb } from '../lib/data';
+import { fetchProjects, fetchTasks, fetchPreviousFlowRows, fetchRawTaskRows, fetchReajusteHistory, brl, updateTaskFieldInDb, projectActionInDb, approveFlowInDb, applyReajusteInDb, releaseFlowInDb, requestFlowReviewInDb } from '../lib/data';
 import { showToast } from '../components/Toast';
-import type { Project, Task, TaskStatus, PreviousFlowRow, RawTaskRow } from '../lib/types';
+import type { Project, Task, TaskStatus, PreviousFlowRow, RawTaskRow, ReajusteHistory } from '../lib/types';
 import { STATUS_LABELS } from '../lib/types';
 import Layout from '../components/Layout';
 import Modal from '../components/Modal';
@@ -111,6 +111,7 @@ export default function Faturamento() {
   const [showReajusteModal, setShowReajusteModal] = useState(false);
   const [reajusteIndex, setReajusteIndex] = useState<'INCC-M' | 'IPC'>('INCC-M');
   const [reajustePct, setReajustePct] = useState<number>(4.2);
+  const [reajusteHistory, setReajusteHistory] = useState<ReajusteHistory[]>([]);
   const [currentTasksPage, setCurrentTasksPage] = useState(1);
   const [tasksPageSize, setTasksPageSize] = useState(25);
   const [currentRawPage, setCurrentRawPage] = useState(1);
@@ -138,20 +139,23 @@ export default function Faturamento() {
 
     async function loadWorkbookSheets() {
       try {
-        const [previousRows, rawRows] = await Promise.all([
+        const [previousRows, rawRows, historyRows] = await Promise.all([
           fetchPreviousFlowRows(selectedProjectId),
           fetchRawTaskRows(selectedProjectId),
+          fetchReajusteHistory(selectedProjectId),
         ]);
 
         if (!cancelled) {
           setPreviousFlowRows(previousRows);
           setRawTaskRows(rawRows);
+          setReajusteHistory(historyRows);
         }
       } catch (e) {
         console.error(e);
         if (!cancelled) {
           setPreviousFlowRows([]);
           setRawTaskRows([]);
+          setReajusteHistory([]);
         }
       }
     }
@@ -211,6 +215,28 @@ export default function Faturamento() {
     }
   };
 
+  const handleReleaseFlow = async (projectId: string) => {
+    try {
+      await releaseFlowInDb(projectId);
+      await load();
+      showToast('✅', 'Fluxo Liberado', 'Fluxo marcado como liberado para operações subsequentes.', 'tg');
+    } catch (e) {
+      console.error(e);
+      showToast('❌', 'Erro ao liberar fluxo', 'Não foi possível liberar o fluxo.', 'tr');
+    }
+  };
+
+  const handleRequestFlowReview = async (projectId: string) => {
+    try {
+      await requestFlowReviewInDb(projectId);
+      await load();
+      showToast('✉️', 'Revisão Solicitada', 'Revisão do fluxo foi solicitada ao responsável.', 'tg');
+    } catch (e) {
+      console.error(e);
+      showToast('❌', 'Erro ao solicitar revisão', 'Não foi possível solicitar revisão do fluxo.', 'tr');
+    }
+  };
+
   const handleApplyReajuste = async () => {
     try {
       await applyReajusteInDb(selectedProjectId, reajusteIndex, reajustePct);
@@ -224,6 +250,9 @@ export default function Faturamento() {
   };
 
   const selectedProject = projects.find(p => p.id === selectedProjectId) || projects[0];
+  const selectedReajustePct = selectedProject?.contract_details?.reajustePct ?? 0;
+  const selectedReajusteAmount = Math.round((selectedProject?.contracted_value ?? 0) * (selectedReajustePct / 100));
+  const selectedReadjustedValue = (selectedProject?.contracted_value ?? 0) + selectedReajusteAmount;
 
   if (!selectedProject) {
     return <Layout breadcrumb={[{ label: 'Fluxo Financeiro' }]}><div className="p-8">Carregando...</div></Layout>;
@@ -343,7 +372,7 @@ export default function Faturamento() {
           </div>
 
           {/* Detailed Financial Overview Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 text-center">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 text-center">
             <div className="bg-[var(--surface2)] p-2 rounded">
               <div className="text-[10px] uppercase font-bold text-[var(--muted)]">Valor Original</div>
               <div className="text-sm font-bold text-[var(--text)]">{brl(selectedProject.contract_original_value)}</div>
@@ -363,6 +392,18 @@ export default function Faturamento() {
             <div className="bg-[var(--surface2)] p-2 rounded">
               <div className="text-[10px] uppercase font-bold text-[var(--muted)]">Margem</div>
               <div className="text-sm font-bold text-amber-700">{selectedProject.margin_pct}%</div>
+            </div>
+            <div className="bg-[#f7f3ff] p-2 rounded border border-violet-200">
+              <div className="text-[10px] uppercase font-bold text-violet-700">Valor Contratado</div>
+              <div className="text-sm font-bold text-violet-900">{brl(selectedProject.contracted_value)}</div>
+            </div>
+            <div className="bg-[#eef7ff] p-2 rounded border border-sky-200">
+              <div className="text-[10px] uppercase font-bold text-sky-700">Valor Reajuste</div>
+              <div className="text-sm font-bold text-sky-900">{brl(selectedReajusteAmount)}</div>
+            </div>
+            <div className="bg-[#e8f5e9] p-2 rounded border border-emerald-200">
+              <div className="text-[10px] uppercase font-bold text-emerald-700">Valor Reajustado</div>
+              <div className="text-sm font-bold text-emerald-900">{brl(selectedReadjustedValue)}</div>
             </div>
             <div className="bg-purple-900/5 p-2 rounded border border-purple-500/20">
               <div className="text-[10px] uppercase font-bold text-purple-700">Planejado Atual</div>
@@ -396,11 +437,35 @@ export default function Faturamento() {
                 <Check size={14} /> Aprovar Fluxo Completo
               </button>
             )}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => handleReleaseFlow(selectedProject.id)}
+                className="bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs py-1 rounded transition"
+              >
+                Fluxo Liberado
+              </button>
+              <button
+                onClick={() => handleRequestFlowReview(selectedProject.id)}
+                className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs py-1 rounded transition"
+              >
+                Revisar Fluxo
+              </button>
+            </div>
             <div className="grid grid-cols-3 gap-1">
               <button onClick={() => handleProjectAction(selectedProject.id, 'medido')} className="bg-[var(--surface3)] hover:bg-[var(--border2)] text-[10px] font-bold py-1 rounded transition text-center">Medições</button>
               <button onClick={() => handleProjectAction(selectedProject.id, 'faturado')} className="bg-[var(--surface3)] hover:bg-[var(--border2)] text-[10px] font-bold py-1 rounded transition text-center">Faturar</button>
               <button onClick={() => handleProjectAction(selectedProject.id, 'pago')} className="bg-[var(--surface3)] hover:bg-[var(--border2)] text-[10px] font-bold py-1 rounded transition text-center">Confirmar Pg</button>
             </div>
+            {selectedProject.flow_released && (
+              <div className="text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-3 py-2">
+                Fluxo liberado em {selectedProject.flow_released_at ? new Date(selectedProject.flow_released_at).toLocaleDateString('pt-BR') : 'data registrada'}.
+              </div>
+            )}
+            {selectedProject.flow_review_requested && (
+              <div className="text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                Revisão solicitada em {selectedProject.flow_review_requested_at ? new Date(selectedProject.flow_review_requested_at).toLocaleDateString('pt-BR') : 'data registrada'}.
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -438,6 +503,41 @@ export default function Faturamento() {
               </tr>
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <div className="mx-4 mb-6 bg-white border border-[var(--border)] rounded-xl shadow-sm overflow-hidden">
+        <div className="bg-[var(--surface2)] px-4 py-2 text-xs font-bold text-[var(--muted)] border-b border-[var(--border)]">
+          Histórico de Reajustes
+        </div>
+        <div className="p-4">
+          {reajusteHistory.length === 0 ? (
+            <div className="text-sm text-[var(--muted)]">Nenhum reajuste registrado para este projeto.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-xs">
+                <thead>
+                  <tr className="bg-[var(--surface3)] border-b border-[var(--border2)]">
+                    {['Data', 'Índice', '% Reajuste', 'Valor Original', 'Reajuste', 'Reajustado'].map((header) => (
+                      <th key={header} className="py-2 text-left px-2">{header}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {reajusteHistory.map((item) => (
+                    <tr key={item.id} className="border-b border-[var(--border)] hover:bg-[var(--surface2)]">
+                      <td className="py-2 px-2">{new Date(item.created_at).toLocaleDateString('pt-BR')}</td>
+                      <td className="py-2 px-2">{item.index_name}</td>
+                      <td className="py-2 px-2">{Number(item.percentage).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%</td>
+                      <td className="py-2 px-2">{brl(item.original_value)}</td>
+                      <td className="py-2 px-2">{brl(item.reajuste_value)}</td>
+                      <td className="py-2 px-2">{brl(item.readjusted_value)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
 

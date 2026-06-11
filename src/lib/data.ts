@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { supabase } from './supabase';
 import { mockProjects, mockTasks, mockInboxMessages, mockIntegrations } from './mockData';
-import type { Project, Task, TaskStatus, InboxMessage, Integration, BillingProfile, ContractDetails, PreviousFlowRow, RawTaskRow } from './types';
+import type { Project, Task, TaskStatus, InboxMessage, Integration, BillingProfile, ContractDetails, PreviousFlowRow, RawTaskRow, ReajusteHistory } from './types';
 
 // Set strictly to false only if explicitly configured as 'false'
 const useMockData = process.env.NEXT_PUBLIC_USE_MOCKS !== 'false';
@@ -40,6 +40,7 @@ function mapContractDetails(cd: any): ContractDetails | null {
     status: cd.status || 'pending_client',
     originalValue: cd.original_value ? Number(cd.original_value) : 0,
     readjustedValue: cd.readjusted_value ? Number(cd.readjusted_value) : 0,
+    reajustePct: cd.reajuste_pct ? Number(cd.reajuste_pct) : 0,
   };
 }
 
@@ -71,6 +72,10 @@ function mapProject(p: any): Project {
     billing_day: p.dia_medicao ? Number(p.dia_medicao) : 20,
     approved_by_owner: p.fluxo_aprovado ?? false,
     is_critical: isCritical,
+    flow_released: p.flow_released ?? false,
+    flow_released_at: p.flow_released_at || null,
+    flow_review_requested: p.flow_review_requested ?? false,
+    flow_review_requested_at: p.flow_review_requested_at || null,
     tasks_total: 0,
     created_at: p.created_at,
     billing_profile: p.billing_profiles ? mapBillingProfile(Array.isArray(p.billing_profiles) ? p.billing_profiles[0] : p.billing_profiles) : null,
@@ -91,29 +96,29 @@ function mapTaskStatus(statusNf: string | null): TaskStatus {
 function mapTask(t: any): Task {
   return {
     id: t.id,
-    project_id: t.projeto_id,
-    name: t.atividade,
+    project_id: t.projeto_id || t.project_id,
+    name: t.atividade || t.name,
     description: '',
     value: t.valor ? Number(t.valor) : 0,
     status: mapTaskStatus(t.status_nf),
     responsible: '',
     email: '',
-    due_date: t.data_conclusao,
+    due_date: t.data_conclusao || t.due_date,
     created_at: t.created_at || new Date().toISOString(),
     etapa: t.etapa || '',
-    navis_num: t.numero_navis || '',
+    navis_num: t.numero_navis || t.navis_num || '',
     status_nf: t.status_nf || '—',
     pagamento: t.pagamento || '—',
-    date_previous: t.data_anterior,
+    date_previous: t.data_anterior || t.date_previous,
     value_previous: t.valor_anterior ? Number(t.valor_anterior) : null,
-    gap_justification: t.justificativa_gap,
+    gap_justification: t.justificativa_gap || t.gap_justification,
     launch_navis: t.lancar_navis === 'Não Lançar' ? 'Não Lançar' : 'Lançar',
     month_reference: t.mes_referencia,
-    line_color: t.cor_linha,
-    change_indicator: t.indicador_mudanca,
-    text_style: t.estilo_texto,
-    additive_type: t.tipo_aditivo,
-    new_flag: t.flag_novo,
+    line_color: t.cor_linha || t.line_color,
+    change_indicator: t.indicador_mudanca || t.change_indicator,
+    text_style: t.estilo_texto || t.text_style,
+    additive_type: t.tipo_aditivo || t.additive_type,
+    new_flag: t.flag_novo || t.new_flag,
   };
 }
 
@@ -180,7 +185,46 @@ export async function fetchProjects(): Promise<Project[]> {
     console.error('Supabase projects fetch failed:', error);
     throw error;
   }
-  return (data ?? []).map(mapProject);
+
+  const projects = (data ?? []).map(mapProject);
+
+  // Attempt to load contract details separately
+  if (supabase && projects.length > 0) {
+    try {
+      const { data: contractData } = await supabase
+        .from('contract_details')
+        .select('*');
+      
+      if (contractData) {
+        projects.forEach(p => {
+          const contract = contractData.find(c => c.project_id === p.id);
+          if (contract) p.contract_details = mapContractDetails(contract);
+        });
+      }
+    } catch (e) {
+      console.warn('Could not load contract details:', e);
+    }
+  }
+
+  // Attempt to load billing profiles separately
+  if (supabase && projects.length > 0) {
+    try {
+      const { data: billingData } = await supabase
+        .from('billing_profiles')
+        .select('*');
+      
+      if (billingData) {
+        projects.forEach(p => {
+          const billing = billingData.find(b => b.project_id === p.id);
+          if (billing) p.billing_profile = mapBillingProfile(billing);
+        });
+      }
+    } catch (e) {
+      console.warn('Could not load billing profiles:', e);
+    }
+  }
+
+  return projects;
 }
 
 export async function fetchTasks(): Promise<Task[]> {
@@ -192,15 +236,27 @@ export async function fetchTasks(): Promise<Task[]> {
     throw new Error('Supabase client is not initialized. Please verify your credentials.');
   }
 
-  const { data, error } = await supabase
-    .from('vw_fluxo_completo')
+  // Try the view first, then fall back to fluxo_mes_atual
+  const { data: viewData, error: viewError } = await supabase
+    .from('view_financial_flow_rows')
     .select('*');
-  
-  if (error) {
-    console.error('Supabase tasks fetch failed:', error);
-    throw error;
+
+  if (!viewError && viewData) {
+    return (viewData ?? []).map(mapTask);
   }
-  return (data ?? []).map(mapTask);
+
+  console.warn('view_financial_flow_rows not found, trying fluxo_mes_atual:', viewError);
+
+  const { data: flowData, error: flowError } = await supabase
+    .from('fluxo_mes_atual')
+    .select('*');
+
+  if (flowError) {
+    console.error('Supabase tasks fetch failed (both views):', viewError, flowError);
+    throw flowError;
+  }
+
+  return (flowData ?? []).map(mapTask);
 }
 
 export async function fetchTasksByProject(projectId: string): Promise<Task[]> {
@@ -212,16 +268,37 @@ export async function fetchTasksByProject(projectId: string): Promise<Task[]> {
     throw new Error('Supabase client is not initialized.');
   }
 
-  const { data, error } = await supabase
-    .from('vw_fluxo_completo')
+  // Try the view first
+  const { data: viewData, error: viewError } = await supabase
+    .from('view_financial_flow_rows')
+    .select('*')
+    .eq('project_id', projectId);
+
+  if (!viewError && viewData) {
+    return (viewData ?? []).map(mapTask);
+  }
+
+  // Fall back to fluxo_mes_atual
+  const { data: flowData, error: flowError } = await supabase
+    .from('fluxo_mes_atual')
     .select('*')
     .eq('projeto_id', projectId);
-  
-  if (error) {
-    console.error('Supabase tasksByProject fetch failed:', error);
-    throw error;
+
+  if (!flowError && flowData) {
+    return (flowData ?? []).map(mapTask);
   }
-  return (data ?? []).map(mapTask);
+
+  // Fall back to tasks with projeto_id
+  const { data: tasksData, error: tasksError } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('projeto_id', projectId);
+
+  if (tasksError) {
+    console.error('Supabase tasksByProject fetch failed:', viewError, flowError, tasksError);
+    throw tasksError;
+  }
+  return (tasksData ?? []).map(mapTask);
 }
 
 export async function fetchPreviousFlowRows(projectId: string): Promise<PreviousFlowRow[]> {
@@ -296,6 +373,7 @@ export async function fetchRawTaskRows(projectId: string): Promise<RawTaskRow[]>
 
   if (!error && (data ?? []).length > 0) return (data ?? []).map(mapRawTaskRow);
 
+  // Fallback with alternative column names
   const fallback = await supabase
     .from('tasks')
     .select('*')
@@ -305,10 +383,10 @@ export async function fetchRawTaskRows(projectId: string): Promise<RawTaskRow[]>
   if (!fallback.error && (fallback.data ?? []).length > 0) return (fallback.data ?? []).map(mapRawTaskRow);
 
   const flowFallback = await supabase
-    .from('vw_fluxo_completo')
+    .from('fluxo_mes_atual')
     .select('*')
     .eq('projeto_id', projectId)
-    .order('data_conclusao', { ascending: true, nullsFirst: false });
+    .order('data', { ascending: true, nullsFirst: false });
 
   if (flowFallback.error) {
     console.error('Supabase raw tasks fetch failed:', error, fallback.error, flowFallback.error);
@@ -399,19 +477,66 @@ export async function updateTaskFieldInDb(taskId: string, field: string, value: 
 export async function projectActionInDb(projectId: string, action: 'medido' | 'faturado' | 'pago'): Promise<void> {
   if (useMockData) return;
   if (!supabase) throw new Error('Supabase client is not initialized.');
-  
+
   let status = 'Concluído';
-  if (action === 'faturado') status = 'Nota Enviada';
-  if (action === 'pago') status = 'Pago';
-  
-  const { error } = await supabase.rpc('atualizar_status_pagamento', {
-    p_projeto_id: projectId,
-    p_novo_status: status,
-    p_usuario: 'Líder Admin'
-  });
-  
+  let statusNf = 'Concluído';
+  if (action === 'faturado') {
+    status = 'Nota Enviada';
+    statusNf = 'Nota Enviada';
+  }
+  if (action === 'pago') {
+    status = 'Pago';
+    statusNf = 'Pago';
+  }
+
+  const { error: taskError } = await supabase
+    .from('tasks')
+    .update({ status, status_nf: statusNf })
+    .eq('project_id', projectId);
+
+  if (taskError) {
+    console.error(`Failed to update task statuses for project ${projectId}:`, taskError);
+    throw taskError;
+  }
+
+  try {
+    const { error: eventError } = await supabase
+      .from('project_status_events')
+      .insert([{ project_id: projectId, action_type: action === 'medido' ? 'measurements_sent' : action === 'faturado' ? 'invoices_sent' : 'paid', actor_name: 'Líder Admin', created_at: new Date().toISOString() }]);
+    if (eventError) {
+      console.warn('Could not insert project status event, continuing:', eventError);
+    }
+  } catch (e) {
+    console.warn('project_status_events missing or insert failed, ignoring:', e);
+  }
+}
+
+export async function releaseFlowInDb(projectId: string): Promise<void> {
+  if (useMockData) return;
+  if (!supabase) throw new Error('Supabase client is not initialized.');
+
+  const { error } = await supabase
+    .from('projetos')
+    .update({ flow_released: true, flow_released_at: new Date().toISOString() })
+    .eq('id', projectId);
+
   if (error) {
-    console.error(`RPC atualizar_status_pagamento failed for action ${action}:`, error);
+    console.error('Supabase releaseFlowInDb failed:', error);
+    throw error;
+  }
+}
+
+export async function requestFlowReviewInDb(projectId: string): Promise<void> {
+  if (useMockData) return;
+  if (!supabase) throw new Error('Supabase client is not initialized.');
+
+  const { error } = await supabase
+    .from('projetos')
+    .update({ flow_review_requested: true, flow_review_requested_at: new Date().toISOString() })
+    .eq('id', projectId);
+
+  if (error) {
+    console.error('Supabase requestFlowReviewInDb failed:', error);
     throw error;
   }
 }
@@ -419,54 +544,142 @@ export async function projectActionInDb(projectId: string, action: 'medido' | 'f
 export async function approveFlowInDb(projectId: string): Promise<void> {
   if (useMockData) return;
   if (!supabase) throw new Error('Supabase client is not initialized.');
-  
-  const { error } = await supabase.rpc('aprovar_fluxo_projeto', {
-    p_projeto_id: projectId,
-    p_tipo: 'Aprovar Fluxo',
-    p_usuario: 'Owner do Projeto'
-  });
-  
+
+  const { error } = await supabase
+    .from('projetos')
+    .update({ fluxo_aprovado: true, data_aprovacao_fluxo: new Date().toISOString() })
+    .eq('id', projectId);
+
   if (error) {
-    console.error('RPC aprovar_fluxo_projeto failed:', error);
+    console.error('Supabase approveFlowInDb failed:', error);
     throw error;
+  }
+
+  try {
+    const { error: historyError } = await supabase
+      .from('historico_aprovacoes')
+      .insert([{ projeto_id: projectId, mes_referencia: new Date().toISOString().slice(0, 7), tipo_aprovacao: 'Aprovação de Fluxo', aprovado_por: 'Owner do Projeto', criado_em: new Date().toISOString() }]);
+    if (historyError) {
+      console.warn('Could not insert flow approval history, continuing:', historyError);
+    }
+  } catch (e) {
+    console.warn('historico_aprovacoes missing or insert failed, ignoring:', e);
   }
 }
 
 export async function applyReajusteInDb(projectId: string, indexName: string, percentage: number): Promise<void> {
-  void indexName;
-
   if (useMockData) return;
   if (!supabase) throw new Error('Supabase client is not initialized.');
-  
+
   const { data: items, error: fetchError } = await supabase
     .from('fluxo_mes_atual')
     .select('id, valor')
     .eq('projeto_id', projectId)
     .eq('etapa', 'Reajuste');
-    
+
   if (fetchError) {
     console.error('Failed to fetch reajuste items:', fetchError);
     throw fetchError;
   }
-  
+
   if (!items || items.length === 0) return;
-  
-  for (const item of items) {
-    const oldVal = Number(item.valor);
+
+  const totalOld = items.reduce((sum, item) => sum + Number(item.valor || 0), 0);
+  const totalNew = items.reduce((sum, item) => {
+    const oldVal = Number(item.valor || 0);
     const newVal = Math.round(oldVal * (1 + percentage / 100));
-    
+    return sum + newVal;
+  }, 0);
+  const reajusteValue = totalNew - totalOld;
+
+  for (const item of items) {
+    const oldVal = Number(item.valor || 0);
+    const newVal = Math.round(oldVal * (1 + percentage / 100));
+
     const { error: updateError } = await supabase
       .from('fluxo_mes_atual')
-      .update({
-        valor: newVal
-      })
+      .update({ valor: newVal })
       .eq('id', item.id);
-      
+
     if (updateError) {
       console.error(`Failed to update reajuste for item ${item.id}:`, updateError);
       throw updateError;
     }
   }
+
+  const { data: projectRecord, error: projectFetchError } = await supabase
+    .from('projetos')
+    .select('adicional_reajuste, valor_original_contrato, valor_total_aditivado')
+    .eq('id', projectId)
+    .single();
+
+  if (projectFetchError) {
+    console.error('Failed to fetch project reajuste total:', projectFetchError);
+    throw projectFetchError;
+  }
+
+  const currentReajusteTotal = Number(projectRecord?.adicional_reajuste ?? 0);
+  const newReajusteTotal = currentReajusteTotal + reajusteValue;
+  const newContractTotal = Number(projectRecord?.valor_original_contrato ?? 0) + Number(projectRecord?.valor_total_aditivado ?? 0) + newReajusteTotal;
+
+  const { error: projectUpdateError } = await supabase
+    .from('projetos')
+    .update({ adicional_reajuste: newReajusteTotal, valor_total_contrato: newContractTotal })
+    .eq('id', projectId);
+
+  if (projectUpdateError) {
+    console.error('Failed to update project reajuste total:', projectUpdateError);
+    throw projectUpdateError;
+  }
+
+  const { error: contractUpdateError } = await supabase
+    .from('contract_details')
+    .upsert({ project_id: projectId, reajuste_pct: percentage, index: indexName }, { onConflict: 'project_id' });
+
+  if (contractUpdateError) {
+    console.warn('Failed to update or upsert contract detail reajuste percentage, continuing if contract_details is absent:', contractUpdateError);
+  }
+
+  await recordReajusteHistory(projectId, indexName, percentage, totalOld, reajusteValue, totalNew);
+}
+
+export async function recordReajusteHistory(
+  projectId: string,
+  indexName: string,
+  percentage: number,
+  originalValue: number,
+  reajusteValue: number,
+  readjustedValue: number,
+): Promise<void> {
+  if (useMockData) return;
+  if (!supabase) throw new Error('Supabase client is not initialized.');
+
+  const { error } = await supabase
+    .from('reajuste_histories')
+    .insert([{ project_id: projectId, index_name: indexName, percentage, original_value: originalValue, reajuste_value: reajusteValue, readjusted_value: readjustedValue }]);
+
+  if (error) {
+    console.error('Failed to record reajuste history:', error);
+    throw error;
+  }
+}
+
+export async function fetchReajusteHistory(projectId: string): Promise<ReajusteHistory[]> {
+  if (useMockData) return [];
+  if (!supabase) throw new Error('Supabase client is not initialized.');
+
+  const { data, error } = await supabase
+    .from('reajuste_histories')
+    .select('*')
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Supabase reajuste history fetch failed:', error);
+    throw error;
+  }
+
+  return data ?? [];
 }
 
 export async function fetchInboxMessages(): Promise<InboxMessage[]> {

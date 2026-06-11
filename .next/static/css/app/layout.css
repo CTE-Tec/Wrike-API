@@ -844,6 +844,14 @@ video {
 .border-\[var\(--border2\)\] {
   border-color: var(--border2);
 }
+.border-amber-200 {
+  --tw-border-opacity: 1;
+  border-color: rgb(253 230 138 / var(--tw-border-opacity, 1));
+}
+.border-emerald-200 {
+  --tw-border-opacity: 1;
+  border-color: rgb(167 243 208 / var(--tw-border-opacity, 1));
+}
 .border-gray-300 {
   --tw-border-opacity: 1;
   border-color: rgb(209 213 219 / var(--tw-border-opacity, 1));
@@ -853,6 +861,10 @@ video {
 }
 .border-purple-500\/30 {
   border-color: rgb(168 85 247 / 0.3);
+}
+.border-sky-200 {
+  --tw-border-opacity: 1;
+  border-color: rgb(186 230 253 / var(--tw-border-opacity, 1));
 }
 .border-sky-500 {
   --tw-border-opacity: 1;
@@ -873,6 +885,10 @@ video {
 }
 .border-transparent {
   border-color: transparent;
+}
+.border-violet-200 {
+  --tw-border-opacity: 1;
+  border-color: rgb(221 214 254 / var(--tw-border-opacity, 1));
 }
 .border-t-transparent {
   border-top-color: transparent;
@@ -895,9 +911,21 @@ video {
   --tw-bg-opacity: 1;
   background-color: rgb(223 231 238 / var(--tw-bg-opacity, 1));
 }
+.bg-\[\#e8f5e9\] {
+  --tw-bg-opacity: 1;
+  background-color: rgb(232 245 233 / var(--tw-bg-opacity, 1));
+}
 .bg-\[\#eef3f7\] {
   --tw-bg-opacity: 1;
   background-color: rgb(238 243 247 / var(--tw-bg-opacity, 1));
+}
+.bg-\[\#eef7ff\] {
+  --tw-bg-opacity: 1;
+  background-color: rgb(238 247 255 / var(--tw-bg-opacity, 1));
+}
+.bg-\[\#f7f3ff\] {
+  --tw-bg-opacity: 1;
+  background-color: rgb(247 243 255 / var(--tw-bg-opacity, 1));
 }
 .bg-\[\#f7fbf4\] {
   --tw-bg-opacity: 1;
@@ -912,6 +940,18 @@ video {
 .bg-amber-100 {
   --tw-bg-opacity: 1;
   background-color: rgb(254 243 199 / var(--tw-bg-opacity, 1));
+}
+.bg-amber-50 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(255 251 235 / var(--tw-bg-opacity, 1));
+}
+.bg-amber-600 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(217 119 6 / var(--tw-bg-opacity, 1));
+}
+.bg-emerald-50 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(236 253 245 / var(--tw-bg-opacity, 1));
 }
 .bg-emerald-500\/10 {
   background-color: rgb(16 185 129 / 0.1);
@@ -1141,6 +1181,10 @@ video {
   --tw-text-opacity: 1;
   color: rgb(146 64 14 / var(--tw-text-opacity, 1));
 }
+.text-amber-900 {
+  --tw-text-opacity: 1;
+  color: rgb(120 53 15 / var(--tw-text-opacity, 1));
+}
 .text-emerald-400 {
   --tw-text-opacity: 1;
   color: rgb(52 211 153 / var(--tw-text-opacity, 1));
@@ -1152,6 +1196,14 @@ video {
 .text-emerald-700 {
   --tw-text-opacity: 1;
   color: rgb(4 120 87 / var(--tw-text-opacity, 1));
+}
+.text-emerald-800 {
+  --tw-text-opacity: 1;
+  color: rgb(6 95 70 / var(--tw-text-opacity, 1));
+}
+.text-emerald-900 {
+  --tw-text-opacity: 1;
+  color: rgb(6 78 59 / var(--tw-text-opacity, 1));
 }
 .text-green-800 {
   --tw-text-opacity: 1;
@@ -1181,9 +1233,17 @@ video {
   --tw-text-opacity: 1;
   color: rgb(239 68 68 / var(--tw-text-opacity, 1));
 }
+.text-sky-700 {
+  --tw-text-opacity: 1;
+  color: rgb(3 105 161 / var(--tw-text-opacity, 1));
+}
 .text-sky-800 {
   --tw-text-opacity: 1;
   color: rgb(7 89 133 / var(--tw-text-opacity, 1));
+}
+.text-sky-900 {
+  --tw-text-opacity: 1;
+  color: rgb(12 74 110 / var(--tw-text-opacity, 1));
 }
 .text-slate-300 {
   --tw-text-opacity: 1;
@@ -1200,6 +1260,14 @@ video {
 .text-teal-700 {
   --tw-text-opacity: 1;
   color: rgb(15 118 110 / var(--tw-text-opacity, 1));
+}
+.text-violet-700 {
+  --tw-text-opacity: 1;
+  color: rgb(109 40 217 / var(--tw-text-opacity, 1));
+}
+.text-violet-900 {
+  --tw-text-opacity: 1;
+  color: rgb(76 29 149 / var(--tw-text-opacity, 1));
 }
 .text-white {
   --tw-text-opacity: 1;
@@ -1797,6 +1865,10 @@ tbody tr:hover { background: var(--surface2); }
 .hover\:bg-\[var\(--surface2\)\]:hover {
   background-color: var(--surface2);
 }
+.hover\:bg-amber-700:hover {
+  --tw-bg-opacity: 1;
+  background-color: rgb(180 83 9 / var(--tw-bg-opacity, 1));
+}
 .hover\:bg-green-700:hover {
   --tw-bg-opacity: 1;
   background-color: rgb(21 128 61 / var(--tw-bg-opacity, 1));
@@ -1831,22 +1903,20 @@ tbody tr:hover { background: var(--surface2); }
 .disabled\:opacity-50:disabled {
   opacity: 0.5;
 }
-@media (min-width: 768px) {
+@media (min-width: 640px) {
 
-  .md\:grid-cols-4 {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-@media (min-width: 1024px) {
-
-  .lg\:grid-cols-6 {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+  .sm\:grid-cols-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 @media (min-width: 1280px) {
 
   .xl\:col-span-3 {
     grid-column: span 3 / span 3;
+  }
+
+  .xl\:grid-cols-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .xl\:grid-cols-4 {

@@ -21,6 +21,19 @@ export interface ContractDetails {
   status: 'pending_client' | 'approved' | 'review_required';
   originalValue: number;
   readjustedValue: number;
+  reajustePct: number;
+}
+
+export interface ReajusteHistory {
+  id: string;
+  project_id: string;
+  index_name: string;
+  percentage: number;
+  original_value: number;
+  reajuste_value: number;
+  readjusted_value: number;
+  notes?: string | null;
+  created_at: string;
 }
 
 export interface Project {
@@ -47,6 +60,10 @@ export interface Project {
   billing_day: number;
   approved_by_owner: boolean;
   is_critical: boolean;
+  flow_released?: boolean;
+  flow_released_at?: string | null;
+  flow_review_requested?: boolean;
+  flow_review_requested_at?: string | null;
   billing_profile?: BillingProfile | null;
   contract_details?: ContractDetails | null;
 }

@@ -44,7 +44,8 @@ export const mockProjects: Project[] = [
       lastFupDate: "2026-05-24",
       status: "pending_client",
       originalValue: 184100,
-      readjustedValue: 191464
+      readjustedValue: 191464,
+      reajustePct: 4.2,
     }
   },
   {
