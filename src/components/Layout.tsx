@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import Sidebar from './Sidebar';
@@ -61,7 +61,9 @@ export default function Layout({ breadcrumb, children, toolbar }: LayoutProps) {
     <>
       <Topbar breadcrumb={breadcrumb} />
       <div className="app-body">
-        <Sidebar />
+        <Suspense fallback={<div className="sidebar" style={{ width: 214, minWidth: 214, background: '#002639' }} />}>
+          <Sidebar />
+        </Suspense>
         <div className="main">
           {toolbar}
           <div className="content">

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { fetchProjects, fetchTasks, fetchPreviousFlowRows, fetchRawTaskRows, fetchReajusteHistory, brl, updateTaskFieldInDb, projectActionInDb, approveFlowInDb, applyReajusteInDb, releaseFlowInDb, requestFlowReviewInDb } from '../lib/data';
 import { showToast } from '../components/Toast';
 import type { Project, Task, TaskStatus, PreviousFlowRow, RawTaskRow, ReajusteHistory } from '../lib/types';
@@ -100,11 +101,15 @@ function excelCellClass(task: Task, column: 'date' | 'value' | 'gap' | 'launch' 
 }
 
 export default function Faturamento() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const projectIdParam = searchParams?.get('projectId');
+
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [previousFlowRows, setPreviousFlowRows] = useState<PreviousFlowRow[]>([]);
   const [rawTaskRows, setRawTaskRows] = useState<RawTaskRow[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+  const [selectedProjectId, setSelectedProjectId] = useState<string>(projectIdParam || '');
   const [activeSheet, setActiveSheet] = useState<WorkbookTab>('mes-atual');
   const [filter, setFilter] = useState<TaskStatus | 'all' | 'critical'>('all');
   const [search, setSearch] = useState('');
@@ -123,14 +128,20 @@ export default function Faturamento() {
     const [p, t] = await Promise.all([fetchProjects(), fetchTasks()]);
     setProjects(p);
     setTasks(t);
-    if (p.length > 0 && !selectedProjectId) {
+    if (p.length > 0 && !selectedProjectId && !projectIdParam) {
       setSelectedProjectId(p[0].id);
     }
-  }, [selectedProjectId]);
+  }, [selectedProjectId, projectIdParam]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (projectIdParam) {
+      setSelectedProjectId(projectIdParam);
+    }
+  }, [projectIdParam]);
 
   useEffect(() => {
     if (!selectedProjectId) return;
@@ -355,7 +366,11 @@ export default function Faturamento() {
             <div className="flex gap-2">
               <select 
                 value={selectedProjectId} 
-                onChange={(e) => setSelectedProjectId(e.target.value)}
+                onChange={(e) => {
+                  const newId = e.target.value;
+                  setSelectedProjectId(newId);
+                  router.push(`/faturamento?projectId=${newId}`);
+                }}
                 className="bg-[var(--surface2)] border border-[var(--border2)] rounded px-3 py-1 text-xs outline-none"
               >
                 {projects.map(p => (
