@@ -26,6 +26,45 @@ const instructions = [
   'Exportar a tabela do Wrike para Excel e copiar os valores para a aba Tasks sem alterar a ordem das colunas.',
 ];
 
+type PaginationControlsProps = {
+  currentPage: number;
+  totalPages: number;
+  pageSize: number;
+  totalItems: number;
+  itemName: string;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (size: number) => void;
+};
+
+function PaginationControls({ currentPage, totalPages, pageSize, totalItems, itemName, onPageChange, onPageSizeChange }: PaginationControlsProps) {
+  const start = totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const end = Math.min(totalItems, currentPage * pageSize);
+  const pageSizes = [10, 25, 50, 100];
+
+  return (
+    <div className="table-controls">
+      <div className="table-page-info">
+        Mostrando {start}–{end} de {totalItems} {itemName}
+      </div>
+      <div className="table-page-actions">
+        <button type="button" disabled={currentPage <= 1} onClick={() => onPageChange(currentPage - 1)}>
+          Anterior
+        </button>
+        <button type="button" disabled={currentPage >= totalPages} onClick={() => onPageChange(currentPage + 1)}>
+          Próxima
+        </button>
+        <select value={pageSize} onChange={(e) => onPageSizeChange(Number(e.currentTarget.value))}>
+          {pageSizes.map((size) => (
+            <option key={size} value={size}>
+              {size} / página
+            </option>
+          ))}
+        </select>
+      </div>
+    </div>
+  );
+}
+
 function formatDate(value: string | null | undefined): string {
   if (!value) return '—';
   const date = new Date(value);
@@ -72,6 +111,12 @@ export default function Faturamento() {
   const [showReajusteModal, setShowReajusteModal] = useState(false);
   const [reajusteIndex, setReajusteIndex] = useState<'INCC-M' | 'IPC'>('INCC-M');
   const [reajustePct, setReajustePct] = useState<number>(4.2);
+  const [currentTasksPage, setCurrentTasksPage] = useState(1);
+  const [tasksPageSize, setTasksPageSize] = useState(25);
+  const [currentRawPage, setCurrentRawPage] = useState(1);
+  const [rawPageSize, setRawPageSize] = useState(25);
+  const [currentPreviousPage, setCurrentPreviousPage] = useState(1);
+  const [previousPageSize, setPreviousPageSize] = useState(25);
 
   const load = useCallback(async () => {
     const [p, t] = await Promise.all([fetchProjects(), fetchTasks()]);
@@ -116,6 +161,15 @@ export default function Faturamento() {
     return () => {
       cancelled = true;
     };
+  }, [selectedProjectId]);
+
+  useEffect(() => {
+    setCurrentTasksPage(1);
+  }, [filter, search, selectedProjectId]);
+
+  useEffect(() => {
+    setCurrentRawPage(1);
+    setCurrentPreviousPage(1);
   }, [selectedProjectId]);
 
   const handleUpdateTaskField = async (taskId: string, field: keyof Task, value: Task[keyof Task]) => {
@@ -178,6 +232,28 @@ export default function Faturamento() {
   // Filter tasks belonging to current project
   const projectTasks = tasks.filter(t => t.project_id === selectedProject.id);
 
+  const filteredTasks = projectTasks.filter(t => {
+    if (filter === 'critical') return selectedProject.is_critical;
+    if (filter !== 'all' && t.status !== filter) return false;
+    if (search) {
+      const term = search.toLowerCase();
+      return t.name.toLowerCase().includes(term) || t.etapa.toLowerCase().includes(term);
+    }
+    return true;
+  });
+
+  const tasksPageCount = Math.max(1, Math.ceil(filteredTasks.length / tasksPageSize));
+  const displayedTasks = filteredTasks.slice((currentTasksPage - 1) * tasksPageSize, currentTasksPage * tasksPageSize);
+
+  const rawPageCount = Math.max(1, Math.ceil(rawTaskRows.length / rawPageSize));
+  const displayedRawRows = rawTaskRows.slice((currentRawPage - 1) * rawPageSize, currentRawPage * rawPageSize);
+
+  const previousPageCount = Math.max(1, Math.ceil(previousFlowRows.length / previousPageSize));
+  const displayedPreviousRows = previousFlowRows.slice((currentPreviousPage - 1) * previousPageSize, currentPreviousPage * previousPageSize);
+
+  // Calculate totals by stage for the horizontal summary table
+  const stages = ['Projeto', 'Eficiência', 'Interiores', 'Materiais', 'Obras', 'Operação', 'Sistemas Prediais', 'Taxas', 'Outros'];
+
   const plannedComparisonRows = rawTaskRows.reduce((acc, row) => {
     const sourceDate = row.due_date || row.start_date;
     const month = sourceDate ? sourceDate.slice(0, 7) : 'Sem data';
@@ -191,20 +267,7 @@ export default function Faturamento() {
 
   const plannedRows = Array.from(plannedComparisonRows.values()).sort((a, b) => a.month.localeCompare(b.month));
 
-  // Apply filters
-  const filteredTasks = projectTasks.filter(t => {
-    if (filter === 'critical') return selectedProject.is_critical;
-    if (filter !== 'all' && t.status !== filter) return false;
-    if (search) {
-      const term = search.toLowerCase();
-      return t.name.toLowerCase().includes(term) || t.etapa.toLowerCase().includes(term);
-    }
-    return true;
-  });
-
   // Calculate totals by stage for the horizontal summary table
-  const stages = ['Projeto', 'Eficiência', 'Interiores', 'Materiais', 'Obras', 'Operação', 'Sistemas Prediais', 'Taxas', 'Outros'];
-  
   const stageTotals = stages.reduce((acc, stage) => {
     const stageTasks = projectTasks.filter(t => t.etapa === stage);
     const original = stageTasks.reduce((s, t) => s + (t.value_previous || t.value), 0);
@@ -434,7 +497,7 @@ export default function Faturamento() {
                 </tr>
               </thead>
               <tbody>
-                {rawTaskRows.map((row) => (
+                {displayedRawRows.map((row) => (
                   <tr key={row.id} className="border-b border-[var(--border)] hover:bg-[var(--surface2)]">
                     <td className="min-w-[360px] font-medium">{row.name}</td>
                     <td>{formatDate(row.start_date)}</td>
@@ -453,6 +516,15 @@ export default function Faturamento() {
               </tbody>
             </table>
           </div>
+          <PaginationControls
+            currentPage={currentRawPage}
+            totalPages={rawPageCount}
+            pageSize={rawPageSize}
+            totalItems={rawTaskRows.length}
+            itemName="linhas de Tasks"
+            onPageChange={setCurrentRawPage}
+            onPageSizeChange={(size) => { setRawPageSize(size); setCurrentRawPage(1); }}
+          />
         </div>
       )}
 
@@ -468,7 +540,7 @@ export default function Faturamento() {
                 </tr>
               </thead>
               <tbody>
-                {previousFlowRows.map((row) => (
+                {displayedPreviousRows.map((row) => (
                   <tr key={row.id} className={`border-b border-[var(--border)] hover:bg-[var(--surface2)] ${row.launch_navis === 'Não Lançar' ? 'opacity-60' : ''}`}>
                     <td className="font-bold">{row.etapa}</td>
                     <td className="min-w-[380px] font-medium">{row.atividade}</td>
@@ -486,6 +558,15 @@ export default function Faturamento() {
               </tbody>
             </table>
           </div>
+          <PaginationControls
+            currentPage={currentPreviousPage}
+            totalPages={previousPageCount}
+            pageSize={previousPageSize}
+            totalItems={previousFlowRows.length}
+            itemName="linhas de histórico"
+            onPageChange={setCurrentPreviousPage}
+            onPageSizeChange={(size) => { setPreviousPageSize(size); setCurrentPreviousPage(1); }}
+          />
         </div>
       )}
 
@@ -575,7 +656,7 @@ export default function Faturamento() {
               </tr>
             </thead>
             <tbody>
-              {filteredTasks.map((t, index) => {
+              {displayedTasks.map((t, index) => {
                 return (
                   <tr key={t.id} className={excelRowClass(t)}>
                     <td className="excel-row-number">{index + 32}</td>
@@ -668,6 +749,15 @@ export default function Faturamento() {
             </tbody>
           </table>
         </div>
+        <PaginationControls
+          currentPage={currentTasksPage}
+          totalPages={tasksPageCount}
+          pageSize={tasksPageSize}
+          totalItems={filteredTasks.length}
+          itemName="atividades"
+          onPageChange={setCurrentTasksPage}
+          onPageSizeChange={(size) => { setTasksPageSize(size); setCurrentTasksPage(1); }}
+        />
       </div>
       </>
       )}
