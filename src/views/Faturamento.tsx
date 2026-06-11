@@ -319,7 +319,7 @@ export default function Faturamento() {
     >
       {/* Critical Flow Alert Banner */}
       {selectedProject.is_critical && (
-        <div className="mx-4 mt-4 bg-purple-900/10 border border-purple-500/30 text-purple-200 p-3 rounded-lg flex items-center justify-between animate-pulse">
+        <div className="mx-4 mt-4 bg-purple-900/10 border border-purple-500/30 text-purple-900 p-3 rounded-lg flex items-center justify-between animate-pulse">
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-purple-500 inline-block animate-ping" />
             <AlertOctagon size={16} className="text-purple-400" />
