@@ -856,9 +856,6 @@ video {
 .whitespace-nowrap {
   white-space: nowrap;
 }
-.whitespace-pre-wrap {
-  white-space: pre-wrap;
-}
 .rounded {
   border-radius: 0.25rem;
 }
@@ -985,10 +982,6 @@ video {
 .bg-\[\#f7f3ff\] {
   --tw-bg-opacity: 1;
   background-color: rgb(247 243 255 / var(--tw-bg-opacity, 1));
-}
-.bg-\[\#f7fbf4\] {
-  --tw-bg-opacity: 1;
-  background-color: rgb(247 251 244 / var(--tw-bg-opacity, 1));
 }
 .bg-\[var\(--surface2\)\] {
   background-color: var(--surface2);
@@ -1226,9 +1219,6 @@ video {
   font-size: 0.75rem;
   line-height: 1rem;
 }
-.font-black {
-  font-weight: 900;
-}
 .font-bold {
   font-weight: 700;
 }
@@ -1259,9 +1249,6 @@ video {
 .text-\[\#3f6878\] {
   --tw-text-opacity: 1;
   color: rgb(63 104 120 / var(--tw-text-opacity, 1));
-}
-.text-\[var\(--cte2\)\] {
-  color: var(--cte2);
 }
 .text-\[var\(--muted\)\] {
   color: var(--muted);
@@ -1773,7 +1760,6 @@ td { padding: 9px 13px; border-bottom: 1px solid var(--border); vertical-align: 
 td:first-child { padding-left: 28px; }
 tr:last-child td { border-bottom: none; }
 tbody tr { transition: background .1s; }
-tbody tr:hover { background: var(--surface2); }
 
 .table-controls {
   display: flex;
@@ -1860,7 +1846,7 @@ tbody tr:hover { background: var(--surface2); }
 .excel-row-number { position: sticky; left: 0; z-index: 2; }
 .excel-row-number { padding: 7px 6px; font-size: 11px; }
 .excel-cell { padding: 7px 10px; background: #fff; vertical-align: middle; }
-.excel-data-row:hover .excel-cell { background: #f7fbff; }
+
 .excel-row-blue .excel-cell { background: #d9eaf7; }
 .excel-row-green .excel-cell { background: #e2f0d9; }
 .excel-row-disabled .excel-cell { color: #7a8490; text-decoration: line-through; background: #f3f4f6; }

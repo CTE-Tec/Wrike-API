@@ -301,7 +301,6 @@ td { padding: 9px 13px; border-bottom: 1px solid var(--border); vertical-align: 
 td:first-child { padding-left: 28px; }
 tr:last-child td { border-bottom: none; }
 tbody tr { transition: background .1s; }
-tbody tr:hover { background: var(--surface2); }
 
 .table-controls {
   display: flex;
@@ -388,7 +387,7 @@ tbody tr:hover { background: var(--surface2); }
 .excel-row-number { position: sticky; left: 0; z-index: 2; }
 .excel-row-number { padding: 7px 6px; font-size: 11px; }
 .excel-cell { padding: 7px 10px; background: #fff; vertical-align: middle; }
-.excel-data-row:hover .excel-cell { background: #f7fbff; }
+
 .excel-row-blue .excel-cell { background: #d9eaf7; }
 .excel-row-green .excel-cell { background: #e2f0d9; }
 .excel-row-disabled .excel-cell { color: #7a8490; text-decoration: line-through; background: #f3f4f6; }
