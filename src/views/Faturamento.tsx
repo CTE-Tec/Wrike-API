@@ -8,7 +8,7 @@ import type { Project, Task, TaskStatus, PreviousFlowRow, RawTaskRow, ReajusteHi
 import { STATUS_LABELS } from '../lib/types';
 import Layout from '../components/Layout';
 import Modal from '../components/Modal';
-import { Search, AlertOctagon, Check, FileSpreadsheet } from 'lucide-react';
+import { Search, AlertOctagon, Check, FileSpreadsheet, ArrowUpDown } from 'lucide-react';
 
 type WorkbookTab = 'tasks' | 'mes-atual' | 'mes-anterior' | 'planejado';
 
@@ -123,6 +123,7 @@ export default function Faturamento() {
   const [rawPageSize, setRawPageSize] = useState(25);
   const [currentPreviousPage, setCurrentPreviousPage] = useState(1);
   const [previousPageSize, setPreviousPageSize] = useState(25);
+  const [taskDateSortDirection, setTaskDateSortDirection] = useState<'asc' | 'desc'>('asc');
 
   const load = useCallback(async () => {
     const [p, t] = await Promise.all([fetchProjects(), fetchTasks()]);
@@ -287,9 +288,14 @@ export default function Faturamento() {
 
   // Sort tasks chronologically by due_date (ascending), placing tasks without dates at the end
   const sortedTasks = [...filteredTasks].sort((a, b) => {
-    if (!a.due_date) return 1;
-    if (!b.due_date) return -1;
-    return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
+    const aDate = a.due_date ? new Date(a.due_date).getTime() : null;
+    const bDate = b.due_date ? new Date(b.due_date).getTime() : null;
+
+    if (aDate === null && bDate === null) return 0;
+    if (aDate === null) return 1;
+    if (bDate === null) return -1;
+
+    return taskDateSortDirection === 'asc' ? aDate - bDate : bDate - aDate;
   });
 
   const tasksPageCount = Math.max(1, Math.ceil(sortedTasks.length / tasksPageSize));
@@ -742,14 +748,24 @@ export default function Faturamento() {
           ))}
         </div>
         <div className="vright">
-          <div className="search-box">
-            <Search size={12} className="absolute left-[7px] text-[var(--muted)] pointer-events-none" />
-            <input
-              type="text"
-              placeholder="Buscar atividade ou etapa…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="btn btn-secondary inline-flex items-center gap-1 text-[11px] px-2 py-1"
+              onClick={() => setTaskDateSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
+            >
+              <ArrowUpDown size={12} />
+              Ordenar data: {taskDateSortDirection === 'asc' ? 'Cresc.' : 'Desc.'}
+            </button>
+            <div className="search-box">
+              <Search size={12} className="absolute left-[7px] text-[var(--muted)] pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Buscar atividade ou etapa…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
           </div>
         </div>
       </div>

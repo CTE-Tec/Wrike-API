@@ -286,23 +286,31 @@ export async function fetchTasks(): Promise<Task[]> {
     throw new Error('Supabase client is not initialized. Please verify your credentials.');
   }
 
-  // Try the view first, then fall back to fluxo_mes_atual
+  // Try the current banco view first, then fall back to older names and finally fluxo_mes_atual
   const { data: viewData, error: viewError } = await supabase
-    .from('view_financial_flow_rows')
+    .from('vw_fluxo_completo')
     .select('*');
 
   if (!viewError && viewData) {
     return (viewData ?? []).map(mapTask);
   }
 
-  console.warn('view_financial_flow_rows not found, trying fluxo_mes_atual:', viewError);
+  console.warn('vw_fluxo_completo not found, trying view_financial_flow_rows:', viewError);
+
+  const { data: oldViewData, error: oldViewError } = await supabase
+    .from('view_financial_flow_rows')
+    .select('*');
+
+  if (!oldViewError && oldViewData) {
+    return (oldViewData ?? []).map(mapTask);
+  }
 
   const { data: flowData, error: flowError } = await supabase
     .from('fluxo_mes_atual')
     .select('*');
 
   if (flowError) {
-    console.error('Supabase tasks fetch failed (both views):', viewError, flowError);
+    console.error('Supabase tasks fetch failed (all fallbacks):', viewError, oldViewError, flowError);
     throw flowError;
   }
 
@@ -318,9 +326,8 @@ export async function fetchTasksByProject(projectId: string): Promise<Task[]> {
     throw new Error('Supabase client is not initialized.');
   }
 
-  // Try the view first
   const { data: viewData, error: viewError } = await supabase
-    .from('view_financial_flow_rows')
+    .from('vw_fluxo_completo')
     .select('*')
     .eq('project_id', projectId);
 
@@ -328,7 +335,15 @@ export async function fetchTasksByProject(projectId: string): Promise<Task[]> {
     return (viewData ?? []).map(mapTask);
   }
 
-  // Fall back to fluxo_mes_atual
+  const { data: oldViewData, error: oldViewError } = await supabase
+    .from('view_financial_flow_rows')
+    .select('*')
+    .eq('project_id', projectId);
+
+  if (!oldViewError && oldViewData) {
+    return (oldViewData ?? []).map(mapTask);
+  }
+
   const { data: flowData, error: flowError } = await supabase
     .from('fluxo_mes_atual')
     .select('*')
@@ -338,14 +353,13 @@ export async function fetchTasksByProject(projectId: string): Promise<Task[]> {
     return (flowData ?? []).map(mapTask);
   }
 
-  // Fall back to tasks with projeto_id
   const { data: tasksData, error: tasksError } = await supabase
     .from('tasks')
     .select('*')
     .eq('projeto_id', projectId);
 
   if (tasksError) {
-    console.error('Supabase tasksByProject fetch failed:', viewError, flowError, tasksError);
+    console.error('Supabase tasksByProject fetch failed:', viewError, oldViewError, flowError, tasksError);
     throw tasksError;
   }
   return (tasksData ?? []).map(mapTask);
