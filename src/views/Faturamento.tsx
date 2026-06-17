@@ -76,21 +76,27 @@ const tasksColumns = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'
 
 function excelRowClass(task: Task): string {
   const classes = ['excel-data-row'];
+  if (task.status_nf === 'Pago') {
+    return classes.join(' ');
+  }
   if (task.line_color === 'azul' || task.status_nf === 'Enviar Nota') classes.push('excel-row-blue');
-  if (task.change_indicator === 'verde' || task.new_flag === 'NOVO') classes.push('excel-row-green');
+  if (task.is_new_faturavel || task.name_changed || task.new_flag === 'NOVO' || task.change_indicator === 'verde') classes.push('excel-row-green');
   if (task.launch_navis === 'Não Lançar' || task.text_style === 'tachado') classes.push('excel-row-disabled');
   return classes.join(' ');
 }
 
 function excelCellClass(task: Task, column: 'date' | 'value' | 'gap' | 'launch' | 'status' | 'activity' | 'etapa'): string {
   const classes = ['excel-cell'];
-  if (column === 'date' && task.date_previous) classes.push('excel-cell-changed');
-  if (column === 'value' && task.value_previous != null) classes.push('excel-cell-changed');
+  if (task.status_nf === 'Pago') {
+    return classes.join(' ');
+  }
+  if (column === 'date' && task.date_changed) classes.push('excel-cell-changed');
+  if (column === 'value' && task.value_changed) classes.push('excel-cell-changed');
   if (column === 'gap' && task.gap_justification === 'Justificar GAP no Wrike') classes.push('excel-cell-gap');
   if (column === 'launch' && task.launch_navis === 'Não Lançar') classes.push('excel-cell-muted');
   if (column === 'status' && task.status_nf === 'Enviar Nota') classes.push('excel-cell-send-note');
   if (column === 'activity' && task.additive_type) classes.push('excel-cell-additive');
-  if (column === 'etapa' && task.change_indicator === 'verde') classes.push('excel-cell-new');
+  if (column === 'etapa' && (task.is_new_faturavel || task.name_changed || task.new_flag === 'NOVO' || task.change_indicator === 'verde')) classes.push('excel-cell-new');
   return classes.join(' ');
 }
 
@@ -279,8 +285,15 @@ export default function Faturamento() {
     return true;
   });
 
-  const tasksPageCount = Math.max(1, Math.ceil(filteredTasks.length / tasksPageSize));
-  const displayedTasks = filteredTasks.slice((currentTasksPage - 1) * tasksPageSize, currentTasksPage * tasksPageSize);
+  // Sort tasks chronologically by due_date (ascending), placing tasks without dates at the end
+  const sortedTasks = [...filteredTasks].sort((a, b) => {
+    if (!a.due_date) return 1;
+    if (!b.due_date) return -1;
+    return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
+  });
+
+  const tasksPageCount = Math.max(1, Math.ceil(sortedTasks.length / tasksPageSize));
+  const displayedTasks = sortedTasks.slice((currentTasksPage - 1) * tasksPageSize, currentTasksPage * tasksPageSize);
 
   const rawPageCount = Math.max(1, Math.ceil(rawTaskRows.length / rawPageSize));
   const displayedRawRows = rawTaskRows.slice((currentRawPage - 1) * rawPageSize, currentRawPage * rawPageSize);
@@ -289,7 +302,24 @@ export default function Faturamento() {
   const displayedPreviousRows = previousFlowRows.slice((currentPreviousPage - 1) * previousPageSize, currentPreviousPage * previousPageSize);
 
   // Calculate totals by stage for the horizontal summary table
-  const stages = ['Projeto', 'Eficiência', 'Interiores', 'Materiais', 'Obras', 'Operação', 'Sistemas Prediais', 'Taxas', 'Outros'];
+  const stages = [
+    'Projeto',
+    'Eficiência Energética',
+    'Carbono',
+    'Materiais',
+    'Obras',
+    'Operação e Manutenção',
+    'Eventos',
+    'Sistemas Prediais',
+    'Conforto',
+    'Acústica',
+    'Rec',
+    'Reajuste',
+    'Retenção',
+    'Repasse',
+    'Taxa',
+    'Outros'
+  ];
 
   const plannedComparisonRows = rawTaskRows.reduce((acc, row) => {
     const sourceDate = row.due_date || row.start_date;
@@ -827,10 +857,20 @@ export default function Faturamento() {
                         className="excel-select w-full"
                       >
                         <option value="">Nenhuma</option>
-                        <option value="Atraso do cliente na aprovação">Atraso cliente na aprovação</option>
-                        <option value="Atraso do cliente na liberação da obra">Atraso cliente na liberação</option>
-                        <option value="Replanejamento de escopo">Replanejamento de escopo</option>
-                        <option value="Reajuste contratual pendente">Reajuste pendente</option>
+                        <option value="Justificar GAP no Wrike">Justificar GAP no Wrike</option>
+                        <option value="Cliente Solicitou Alteração / Não Aprovou">Cliente Solicitou Alteração / Não Aprovou</option>
+                        <option value="CTE não entregou por indisponibilidade de equipe">CTE não entregou por indisponibilidade de equipe</option>
+                        <option value="Erro de planejamento">Erro de planejamento</option>
+                        <option value="Cliente não liberou a execução">Cliente não liberou a execução</option>
+                        <option value="Alteração de Cronograma">Alteração de Cronograma</option>
+                        <option value="Atraso de projeto/obra">Atraso de projeto/obra</option>
+                        <option value="Faltou dados/documentos por parte do cliente">Faltou dados/documentos por parte do cliente</option>
+                        <option value="Redução de escopo">Redução de escopo</option>
+                        <option value="Paralisação">Paralisação</option>
+                        <option value="Cancelamento do projeto">Cancelamento do projeto</option>
+                        <option value="Eventos Climáticos Extremos/Pandemia">Eventos Climáticos Extremos/Pandemia</option>
+                        <option value="Acidente de obras">Acidente de obras</option>
+                        <option value="Falta de Pagamento">Falta de Pagamento</option>
                       </select>
                     </td>
                     

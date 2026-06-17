@@ -93,6 +93,10 @@ export interface Task {
   text_style?: string | null;
   additive_type?: string | null;
   new_flag?: string | null;
+  date_changed?: boolean;
+  value_changed?: boolean;
+  name_changed?: boolean;
+  is_new_faturavel?: boolean;
 }
 
 export interface PreviousFlowRow {
@@ -116,6 +120,10 @@ export interface PreviousFlowRow {
   text_style?: string | null;
   additive_type?: string | null;
   new_flag?: string | null;
+  date_changed?: boolean;
+  value_changed?: boolean;
+  name_changed?: boolean;
+  is_new_faturavel?: boolean;
 }
 
 export interface RawTaskRow {

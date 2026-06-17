@@ -370,9 +370,38 @@ tbody tr { transition: background .1s; }
 
 /* Excel mirror grid */
 .excel-sheet { border-radius: 4px; background: #fff; }
-.excel-grid { border-collapse: separate; border-spacing: 0; }
+.excel-sheet .overflow-x-auto { max-height: 550px; overflow-y: auto; overflow-x: auto; position: relative; }
+.excel-grid { border-collapse: separate; border-spacing: 0; width: 100%; }
 .excel-grid th,
 .excel-grid td { border-right: 1px solid #d8dee7; border-bottom: 1px solid #d8dee7; }
+.excel-grid thead th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #eef3f7;
+}
+.excel-grid thead tr.excel-column-row th {
+  top: 0;
+  z-index: 12;
+}
+.excel-grid thead tr:nth-child(2) th {
+  top: 24px;
+  z-index: 12;
+  background: var(--surface3);
+}
+.excel-corner {
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 15 !important;
+}
+.excel-grid thead tr:nth-child(2) .excel-row-header {
+  position: sticky;
+  top: 24px;
+  left: 0;
+  z-index: 15 !important;
+  background: #eef3f7;
+}
 .excel-column-row th {
   height: 24px; padding: 3px 8px; background: #eef3f7; color: #5f7790;
   font-size: 10px; font-weight: 700; text-align: center; letter-spacing: 0;

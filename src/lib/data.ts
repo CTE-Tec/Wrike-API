@@ -94,23 +94,44 @@ function mapTaskStatus(statusNf: string | null): TaskStatus {
 }
 
 function mapTask(t: any): Task {
+  const date_prev = t.data_anterior || t.date_previous || null;
+  const value_prev = t.valor_anterior != null ? Number(t.valor_anterior) : t.value_previous != null ? Number(t.value_previous) : null;
+  const current_date = t.data_conclusao_atividade || t.data_conclusao || t.data || t.due_date || null;
+  const current_value = t.valor ? Number(t.valor) : 0;
+  
+  const is_new = t.is_new_faturavel !== undefined 
+    ? t.is_new_faturavel 
+    : (t.flag_novo === 'NOVO' || t.new_flag === 'NOVO' || (date_prev === null && value_prev === null));
+    
+  const date_chg = t.date_changed !== undefined
+    ? t.date_changed
+    : (!!date_prev && !!current_date && current_date.split('T')[0] !== date_prev.split('T')[0]);
+
+  const value_chg = t.value_changed !== undefined
+    ? t.value_changed
+    : (value_prev !== null && value_prev !== undefined && current_value !== value_prev);
+
+  const name_chg = t.name_changed !== undefined
+    ? t.name_changed
+    : false;
+
   return {
     id: t.id,
     project_id: t.projeto_id || t.project_id,
     name: t.atividade || t.name,
     description: '',
-    value: t.valor ? Number(t.valor) : 0,
+    value: current_value,
     status: mapTaskStatus(t.status_nf),
     responsible: '',
     email: '',
-    due_date: t.data_conclusao_atividade || t.data_conclusao || t.data || t.due_date,
+    due_date: current_date,
     created_at: t.created_at || new Date().toISOString(),
     etapa: t.etapa || '',
     navis_num: t.numero_navis || t.navis_num || '',
     status_nf: t.status_nf || '—',
     pagamento: t.pagamento || '—',
-    date_previous: t.data_anterior || t.date_previous,
-    value_previous: t.valor_anterior ? Number(t.valor_anterior) : null,
+    date_previous: date_prev,
+    value_previous: value_prev,
     gap_justification: t.justificativa_gap || t.gap_justification,
     launch_navis: t.lancar_navis === 'Não Lançar' ? 'Não Lançar' : 'Lançar',
     month_reference: t.mes_referencia,
@@ -119,6 +140,10 @@ function mapTask(t: any): Task {
     text_style: t.estilo_texto || t.text_style,
     additive_type: t.tipo_aditivo || t.additive_type,
     new_flag: t.flag_novo || t.new_flag,
+    date_changed: date_chg,
+    value_changed: value_chg,
+    name_changed: name_chg,
+    is_new_faturavel: is_new,
   };
 }
 
@@ -128,6 +153,27 @@ function normalizeLaunchNavis(value: unknown): 'Lançar' | 'Não Lançar' {
 }
 
 function mapPreviousFlowRow(row: any): PreviousFlowRow {
+  const date_prev = row.data_anterior || row.date_previous || null;
+  const value_prev = row.valor_anterior != null ? Number(row.valor_anterior) : row.value_previous != null ? Number(row.value_previous) : null;
+  const current_date = row.data || row.due_date || null;
+  const current_value = Number(row.valor ?? row.value ?? 0);
+
+  const is_new = row.is_new_faturavel !== undefined 
+    ? row.is_new_faturavel 
+    : (row.new_flag === 'NOVO' || (date_prev === null && value_prev === null));
+    
+  const date_chg = row.date_changed !== undefined
+    ? row.date_changed
+    : (!!date_prev && !!current_date && current_date.split('T')[0] !== date_prev.split('T')[0]);
+
+  const value_chg = row.value_changed !== undefined
+    ? row.value_changed
+    : (value_prev !== null && value_prev !== undefined && current_value !== value_prev);
+
+  const name_chg = row.name_changed !== undefined
+    ? row.name_changed
+    : false;
+
   return {
     id: row.id,
     project_id: row.projeto_id || row.project_id,
@@ -135,14 +181,18 @@ function mapPreviousFlowRow(row: any): PreviousFlowRow {
     etapa: row.etapa || '',
     atividade: row.atividade || row.name || '',
     navis_num: row.numero_navis || row.navis_num || '',
-    value: Number(row.valor ?? row.value ?? 0),
-    date: row.data || row.due_date || null,
+    value: current_value,
+    date: current_date,
     status_nf: row.status_nf || '—',
     pagamento: row.pagamento || '—',
-    date_previous: row.data_anterior || row.date_previous || null,
-    value_previous: row.valor_anterior != null ? Number(row.valor_anterior) : row.value_previous != null ? Number(row.value_previous) : null,
+    date_previous: date_prev,
+    value_previous: value_prev,
     gap_justification: row.justificativa_gap || row.gap_justification || null,
     launch_navis: normalizeLaunchNavis(row.lancar_navis || row.launch_navis),
+    date_changed: date_chg,
+    value_changed: value_chg,
+    name_changed: name_chg,
+    is_new_faturavel: is_new,
   };
 }
 

@@ -109,17 +109,21 @@ CREATE TABLE IF NOT EXISTS financial_stage_codes (
 );
 
 INSERT INTO financial_stage_codes (code, stage) VALUES
-  ('01', 'Projeto'),
-  ('02', 'Eficiência'),
-  ('03', 'Interiores'),
-  ('04', 'Materiais'),
-  ('05', 'Obras'),
-  ('06', 'Operação'),
-  ('07', 'Palestras'),
-  ('08', 'Sistemas Prediais'),
-  ('09', 'Urbanismo'),
+  ('1', 'Projeto'),
+  ('2', 'Eficiência Energética'),
+  ('3', 'Carbono'),
+  ('4', 'Materiais'),
+  ('5', 'Obras'),
+  ('6', 'Operação e Manutenção'),
+  ('7', 'Eventos'),
+  ('8', 'Sistemas Prediais'),
+  ('9', 'Conforto'),
+  ('10', 'Acústica'),
+  ('RC', 'Rec'),
   ('RE', 'Reajuste'),
-  ('TA', 'Taxas')
+  ('RET', 'Retenção'),
+  ('RP', 'Repasse'),
+  ('TA', 'Taxa')
 ON CONFLICT (code) DO UPDATE SET stage = EXCLUDED.stage;
 
 -- Excel helper lists Tabela2 and Tabela4.
@@ -313,24 +317,30 @@ SELECT
   t.status_nf,
   t.pagamento,
   t.launch_navis,
-  prev.value AS previous_value,
-  prev.due_date AS previous_due_date,
+  COALESCE(prev.name, t.name) AS previous_name,
+  COALESCE(prev.value, t.value_previous) AS previous_value,
+  COALESCE(prev.due_date, t.date_previous) AS previous_due_date,
   prev.status AS previous_status,
-  COALESCE(t.value - prev.value, t.value) AS value_difference,
+  COALESCE(t.value - COALESCE(prev.value, t.value_previous), 0) AS value_difference,
   CASE
-    WHEN prev.due_date IS NULL THEN false
-    WHEN t.due_date::date <> prev.due_date THEN true
+    WHEN COALESCE(prev.due_date, t.date_previous) IS NULL THEN false
+    WHEN t.due_date::date <> COALESCE(prev.due_date, t.date_previous) THEN true
     ELSE false
   END AS date_changed,
   CASE
-    WHEN prev.value IS NULL THEN false
-    WHEN t.value <> prev.value THEN true
+    WHEN COALESCE(prev.value, t.value_previous) IS NULL THEN false
+    WHEN t.value <> COALESCE(prev.value, t.value_previous) THEN true
     ELSE false
   END AS value_changed,
-  CASE WHEN prev.id IS NULL THEN true ELSE false END AS is_new_faturavel,
   CASE
-    WHEN prev.due_date IS NOT NULL
-      AND t.due_date::date <> prev.due_date
+    WHEN prev.name IS NULL THEN false
+    WHEN t.name <> prev.name THEN true
+    ELSE false
+  END AS name_changed,
+  CASE WHEN prev.id IS NULL AND t.date_previous IS NULL AND t.value_previous IS NULL THEN true ELSE false END AS is_new_faturavel,
+  CASE
+    WHEN COALESCE(prev.due_date, t.date_previous) IS NOT NULL
+      AND t.due_date::date <> COALESCE(prev.due_date, t.date_previous)
       AND COALESCE(t.gap_justification, '') = ''
     THEN 'Justificar GAP no Wrike'
     ELSE t.gap_justification
@@ -390,6 +400,7 @@ SELECT
   ) AS tipo_aditivo,
   vc.date_changed,
   vc.value_changed,
+  vc.name_changed,
   vc.is_new_faturavel
 FROM tasks t
 JOIN projects p ON p.id = t.project_id
