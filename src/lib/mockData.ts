@@ -25,6 +25,11 @@ export const mockProjects: Project[] = [
     billing_day: 20,
     approved_by_owner: false,
     is_critical: true,
+    coordenador: "Eduardo Yamada",
+    servico_1: "LEED Core & Shell",
+    servico_2: "Simulação Computacional",
+    rotulo_1: "ST28677-25",
+    rotulo_2: "Fase Projeto",
     billing_profile: {
       id: "BP-01",
       projectId: "SENNA-TOWER-01",
@@ -72,6 +77,11 @@ export const mockProjects: Project[] = [
     billing_day: 25,
     approved_by_owner: true,
     is_critical: false,
+    coordenador: "Camila Peixinho",
+    servico_1: "Comissionamento Comercial",
+    servico_2: "Inspeção de Entrega",
+    rotulo_1: "CP20442-19",
+    rotulo_2: "Fase Obra",
     billing_profile: null,
     contract_details: null
   }

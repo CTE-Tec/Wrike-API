@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { supabase } from './supabase';
 import { mockProjects, mockTasks, mockInboxMessages, mockIntegrations } from './mockData';
-import type { Project, Task, TaskStatus, InboxMessage, Integration, BillingProfile, ContractDetails, PreviousFlowRow, RawTaskRow, ReajusteHistory } from './types';
+import type { Project, Task, TaskStatus, InboxMessage, Integration, BillingProfile, ContractDetails, PreviousFlowRow, RawTaskRow, ReajusteHistory, ProjectStageSummary } from './types';
 
 // Set strictly to false only if explicitly configured as 'false'
 const useMockData = process.env.NEXT_PUBLIC_USE_MOCKS !== 'false';
@@ -67,7 +67,7 @@ function mapProject(p: any): Project {
     reajuste_adicional_value: p.adicional_reajuste ? Number(p.adicional_reajuste) : 0,
     contracted_value: p.valor_total_contrato ? Number(p.valor_total_contrato) : 0,
     margin_pct: p.margem_percentual ? Number(p.margem_percentual) * 100 : 0,
-    total_planned_value: p.valor_total_contrato ? Number(p.valor_total_contrato) : 0,
+    total_planned_value: p.valor_total_planejado ? Number(p.valor_total_planejado) : 0,
     flow_date: p.dia_medicao ? `Dia ${p.dia_medicao}` : '',
     billing_day: p.dia_medicao ? Number(p.dia_medicao) : 20,
     approved_by_owner: p.fluxo_aprovado ?? false,
@@ -76,6 +76,11 @@ function mapProject(p: any): Project {
     flow_released_at: p.flow_released_at || null,
     flow_review_requested: p.flow_review_requested ?? false,
     flow_review_requested_at: p.flow_review_requested_at || null,
+    coordenador: p.coordenador || '',
+    servico_1: p.servico_1 || '',
+    servico_2: p.servico_2 || '',
+    rotulo_1: p.rotulo_1 || '',
+    rotulo_2: p.rotulo_2 || '',
     tasks_total: 0,
     created_at: p.created_at,
     billing_profile: p.billing_profiles ? mapBillingProfile(Array.isArray(p.billing_profiles) ? p.billing_profiles[0] : p.billing_profiles) : null,
@@ -841,4 +846,67 @@ export async function saveBillingProfile(profile: Partial<BillingProfile> & { pr
 
 export function brl(v: number): string {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0 });
+}
+
+export async function fetchProjectStageSummary(projectId: string): Promise<ProjectStageSummary | null> {
+  if (useMockData) {
+    const proj = mockProjects.find(p => p.id === projectId);
+    const contracted = proj?.contracted_value ?? 100000;
+    return {
+      projeto_id: projectId,
+      projeto: Math.round(contracted * 0.22),
+      eficiencia: Math.round(contracted * 0.10),
+      carbono: 0,
+      materiais: 0,
+      obras: Math.round(contracted * 0.42),
+      operacao: 0,
+      eventos: 0,
+      sistemas_prediais: Math.round(contracted * 0.22),
+      conforto: 0,
+      acustica: Math.round(contracted * 0.04),
+      rec: 0,
+      reajuste: 0,
+      retencao: 0,
+      repasse: 0,
+      taxa: 0,
+      total: contracted
+    };
+  }
+
+  if (!supabase) throw new Error('Supabase client is not initialized.');
+
+  const { data, error } = await supabase
+    .from('view_resumo_financeiro_etapas')
+    .select('*')
+    .eq('projeto_id', projectId)
+    .maybeSingle();
+
+  if (error) {
+    console.error('Failed to fetch stage summary:', error);
+    throw error;
+  }
+
+  return data || null;
+}
+
+export async function updateProjectMargin(projectId: string, marginPct: number): Promise<void> {
+  if (useMockData) {
+    const proj = mockProjects.find(p => p.id === projectId);
+    if (proj) {
+      proj.margin_pct = marginPct;
+    }
+    return;
+  }
+
+  if (!supabase) throw new Error('Supabase client is not initialized.');
+
+  const { error } = await supabase
+    .from('projetos')
+    .update({ margem_percentual: marginPct / 100 })
+    .eq('id', projectId);
+
+  if (error) {
+    console.error('Failed to update project margin:', error);
+    throw error;
+  }
 }

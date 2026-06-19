@@ -64,6 +64,11 @@ export interface Project {
   flow_released_at?: string | null;
   flow_review_requested?: boolean;
   flow_review_requested_at?: string | null;
+  coordenador?: string;
+  servico_1?: string;
+  servico_2?: string;
+  rotulo_1?: string;
+  rotulo_2?: string;
   billing_profile?: BillingProfile | null;
   contract_details?: ContractDetails | null;
 }
@@ -141,6 +146,26 @@ export interface RawTaskRow {
   consultant_hours: number | null;
   analyst_hours: number | null;
   intern_hours: number | null;
+}
+
+export interface ProjectStageSummary {
+  projeto_id: string;
+  projeto: number;
+  eficiencia: number;
+  carbono: number;
+  materiais: number;
+  obras: number;
+  operacao: number;
+  eventos: number;
+  sistemas_prediais: number;
+  conforto: number;
+  acustica: number;
+  rec: number;
+  reajuste: number;
+  retencao: number;
+  repasse: number;
+  taxa: number;
+  total: number;
 }
 
 export interface InboxMessage {

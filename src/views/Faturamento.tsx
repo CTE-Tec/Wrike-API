@@ -2,9 +2,9 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { fetchProjects, fetchTasks, fetchPreviousFlowRows, fetchRawTaskRows, fetchReajusteHistory, brl, updateTaskFieldInDb, projectActionInDb, approveFlowInDb, applyReajusteInDb, releaseFlowInDb, requestFlowReviewInDb } from '../lib/data';
+import { fetchProjects, fetchTasks, fetchPreviousFlowRows, fetchRawTaskRows, fetchReajusteHistory, brl, updateTaskFieldInDb, projectActionInDb, approveFlowInDb, applyReajusteInDb, releaseFlowInDb, requestFlowReviewInDb, fetchProjectStageSummary, updateProjectMargin } from '../lib/data';
 import { showToast } from '../components/Toast';
-import type { Project, Task, TaskStatus, PreviousFlowRow, RawTaskRow, ReajusteHistory } from '../lib/types';
+import type { Project, Task, TaskStatus, PreviousFlowRow, RawTaskRow, ReajusteHistory, ProjectStageSummary } from '../lib/types';
 import { STATUS_LABELS } from '../lib/types';
 import Layout from '../components/Layout';
 import Modal from '../components/Modal';
@@ -117,6 +117,7 @@ export default function Faturamento() {
   const [reajusteIndex, setReajusteIndex] = useState<'INCC-M' | 'IPC'>('INCC-M');
   const [reajustePct, setReajustePct] = useState<number>(4.2);
   const [reajusteHistory, setReajusteHistory] = useState<ReajusteHistory[]>([]);
+  const [stageSummary, setStageSummary] = useState<ProjectStageSummary | null>(null);
   const [currentTasksPage, setCurrentTasksPage] = useState(1);
   const [tasksPageSize, setTasksPageSize] = useState(25);
   const [currentRawPage, setCurrentRawPage] = useState(1);
@@ -151,16 +152,18 @@ export default function Faturamento() {
 
     async function loadWorkbookSheets() {
       try {
-        const [previousRows, rawRows, historyRows] = await Promise.all([
+        const [previousRows, rawRows, historyRows, summaryRow] = await Promise.all([
           fetchPreviousFlowRows(selectedProjectId),
           fetchRawTaskRows(selectedProjectId),
           fetchReajusteHistory(selectedProjectId),
+          fetchProjectStageSummary(selectedProjectId),
         ]);
 
         if (!cancelled) {
           setPreviousFlowRows(previousRows);
           setRawTaskRows(rawRows);
           setReajusteHistory(historyRows);
+          setStageSummary(summaryRow);
         }
       } catch (e) {
         console.error(e);
@@ -168,6 +171,7 @@ export default function Faturamento() {
           setPreviousFlowRows([]);
           setRawTaskRows([]);
           setReajusteHistory([]);
+          setStageSummary(null);
         }
       }
     }
@@ -262,9 +266,32 @@ export default function Faturamento() {
   };
 
   const selectedProject = projects.find(p => p.id === selectedProjectId) || projects[0];
-  const selectedReajustePct = selectedProject?.contract_details?.reajustePct ?? 0;
-  const selectedReajusteAmount = Math.round((selectedProject?.contracted_value ?? 0) * (selectedReajustePct / 100));
-  const selectedReadjustedValue = (selectedProject?.contracted_value ?? 0) + selectedReajusteAmount;
+
+  const [isEditingMargin, setIsEditingMargin] = useState(false);
+  const [marginInputValue, setMarginInputValue] = useState('');
+
+  useEffect(() => {
+    if (selectedProject) {
+      setMarginInputValue(String(selectedProject.margin_pct ?? 0));
+    }
+  }, [selectedProject]);
+
+  const handleSaveMargin = async () => {
+    const numVal = parseFloat(marginInputValue.replace(',', '.'));
+    if (isNaN(numVal)) {
+      showToast('⚠️', 'Valor Inválido', 'Por favor, insira um valor numérico válido para a margem.', 'tr');
+      return;
+    }
+    try {
+      await updateProjectMargin(selectedProject.id, numVal);
+      await load();
+      setIsEditingMargin(false);
+      showToast('✅', 'Margem Atualizada', `Margem do projeto atualizada para ${numVal}%.`, 'tg');
+    } catch (e) {
+      console.error(e);
+      showToast('❌', 'Erro ao salvar', 'Não foi possível atualizar a margem do projeto.', 'tr');
+    }
+  };
 
   if (!selectedProject) {
     return <Layout breadcrumb={[{ label: 'Fluxo Financeiro' }]}><div className="p-8">Carregando...</div></Layout>;
@@ -307,25 +334,23 @@ export default function Faturamento() {
   const previousPageCount = Math.max(1, Math.ceil(previousFlowRows.length / previousPageSize));
   const displayedPreviousRows = previousFlowRows.slice((currentPreviousPage - 1) * previousPageSize, currentPreviousPage * previousPageSize);
 
-  // Calculate totals by stage for the horizontal summary table
-  const stages = [
-    'Projeto',
-    'Eficiência Energética',
-    'Carbono',
-    'Materiais',
-    'Obras',
-    'Operação e Manutenção',
-    'Eventos',
-    'Sistemas Prediais',
-    'Conforto',
-    'Acústica',
-    'Rec',
-    'Reajuste',
-    'Retenção',
-    'Repasse',
-    'Taxa',
-    'Outros'
-  ];
+  const SUMMARY_COLUMNS = [
+    { key: 'projeto', label: 'Projeto' },
+    { key: 'eficiencia', label: 'Eficiência Energética' },
+    { key: 'carbono', label: 'Carbono' },
+    { key: 'materiais', label: 'Materiais' },
+    { key: 'obras', label: 'Obras' },
+    { key: 'operacao', label: 'Operação e Manutenção' },
+    { key: 'eventos', label: 'Eventos' },
+    { key: 'sistemas_prediais', label: 'Sistemas Prediais' },
+    { key: 'conforto', label: 'Conforto' },
+    { key: 'acustica', label: 'Acústica' },
+    { key: 'rec', label: 'REC' },
+    { key: 'reajuste', label: 'Reajuste' },
+    { key: 'retencao', label: 'Retenção' },
+    { key: 'repasse', label: 'Repasse' },
+    { key: 'taxa', label: 'Taxa' },
+  ] as const;
 
   const plannedComparisonRows = rawTaskRows.reduce((acc, row) => {
     const sourceDate = row.due_date || row.start_date;
@@ -340,18 +365,16 @@ export default function Faturamento() {
 
   const plannedRows = Array.from(plannedComparisonRows.values()).sort((a, b) => a.month.localeCompare(b.month));
 
-  // Calculate totals by stage for the horizontal summary table
-  const stageTotals = stages.reduce((acc, stage) => {
-    const stageTasks = projectTasks.filter(t => t.etapa === stage);
-    const original = stageTasks.reduce((s, t) => s + (t.value_previous || t.value), 0);
-    const updated = stageTasks.reduce((s, t) => s + t.value, 0);
-    acc[stage] = { original, updated };
-    return acc;
-  }, {} as Record<string, { original: number; updated: number }>);
+  const formatStageValue = (v: number | null | undefined) => {
+    if (v == null || v === 0) return 'R$ 0';
+    return brl(v);
+  };
 
-  // Totals for horizontal table
-  const totalOriginal = Object.values(stageTotals).reduce((s, v) => s + v.original, 0);
-  const totalUpdated = Object.values(stageTotals).reduce((s, v) => s + v.updated, 0);
+  const hasValue = (val: string | null | undefined) => {
+    if (!val) return false;
+    const trimmed = val.trim();
+    return trimmed !== '' && trimmed !== '—' && trimmed !== '-' && trimmed !== 'undefined';
+  };
 
   return (
     <Layout
@@ -384,19 +407,37 @@ export default function Faturamento() {
       <div className="p-4 grid grid-cols-1 xl:grid-cols-4 gap-4">
         {/* Project Meta Card */}
         <div className="bg-white border border-[var(--border)] rounded-xl p-4 shadow-sm xl:col-span-3">
-          <div className="flex items-center justify-between mb-4 pb-3 border-b border-[var(--border)]">
-            <div className="flex items-center gap-3">
-              <div className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: selectedProject.color }} />
+          <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 pb-3 border-b border-[var(--border)] gap-4">
+            <div className="flex items-start gap-3">
+              <div className="w-3.5 h-3.5 rounded-full mt-1.5" style={{ backgroundColor: selectedProject.color }} />
               <div>
                 <h2 className="text-lg font-bold text-[var(--text)]">{selectedProject.name}</h2>
-                <div className="text-xs text-[var(--muted)]">
-                  Cliente: <span className="font-semibold text-[var(--text2)]">{selectedProject.client}</span> | 
-                  Rótulo: <span className="font-semibold text-[var(--text2)]">{selectedProject.label_code}</span> | 
-                  Owner: <span className="font-semibold text-purple-700">👤 {selectedProject.owner}</span>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-1 mt-2 text-xs text-[var(--muted)]">
+                  {hasValue(selectedProject.client) && (
+                    <div>Cliente: <span className="font-semibold text-[var(--text2)]">{selectedProject.client}</span></div>
+                  )}
+                  {hasValue(selectedProject.coordenador || selectedProject.responsible) && (
+                    <div>Coordenador: <span className="font-semibold text-[var(--text2)]">{selectedProject.coordenador || selectedProject.responsible}</span></div>
+                  )}
+                  {hasValue(selectedProject.owner) && (
+                    <div>Owner: <span className="font-semibold text-[var(--text2)]">{selectedProject.owner}</span></div>
+                  )}
+                  {hasValue(selectedProject.rotulo_1 || selectedProject.label_code) && (
+                    <div>Rótulo 1: <span className="font-semibold text-[var(--text2)]">{selectedProject.rotulo_1 || selectedProject.label_code}</span></div>
+                  )}
+                  {hasValue(selectedProject.rotulo_2) && (
+                    <div>Rótulo 2: <span className="font-semibold text-[var(--text2)]">{selectedProject.rotulo_2}</span></div>
+                  )}
+                  {hasValue(selectedProject.servico_1) && (
+                    <div>Serviço 1: <span className="font-semibold text-[var(--text2)]">{selectedProject.servico_1}</span></div>
+                  )}
+                  {hasValue(selectedProject.servico_2) && (
+                    <div>Serviço 2: <span className="font-semibold text-[var(--text2)]">{selectedProject.servico_2}</span></div>
+                  )}
                 </div>
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 self-end md:self-center">
               <select 
                 value={selectedProjectId} 
                 onChange={(e) => {
@@ -420,7 +461,7 @@ export default function Faturamento() {
           </div>
 
           {/* Detailed Financial Overview Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 text-center">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
             <div className="bg-[var(--surface2)] p-2 rounded">
               <div className="text-[10px] uppercase font-bold text-[var(--muted)]">Valor Original</div>
               <div className="text-sm font-bold text-[var(--text)]">{brl(selectedProject.contract_original_value)}</div>
@@ -430,30 +471,68 @@ export default function Faturamento() {
               <div className="text-sm font-bold text-[var(--text)]">{brl(selectedProject.contract_aditivo_value)}</div>
             </div>
             <div className="bg-[var(--surface2)] p-2 rounded">
-              <div className="text-[10px] uppercase font-bold text-[var(--muted)]">Lançado Navis</div>
-              <div className="text-sm font-bold text-teal-700">{brl(selectedProject.navis_launched_value)}</div>
-            </div>
-            <div className="bg-[var(--surface2)] p-2 rounded">
               <div className="text-[10px] uppercase font-bold text-[var(--muted)]">Adicional Reajuste</div>
               <div className="text-sm font-bold text-[var(--text)]">{brl(selectedProject.reajuste_adicional_value)}</div>
             </div>
-            <div className="bg-[var(--surface2)] p-2 rounded">
+            <div className="bg-[var(--surface2)] p-2 rounded flex flex-col justify-between min-h-[58px]">
               <div className="text-[10px] uppercase font-bold text-[var(--muted)]">Margem</div>
-              <div className="text-sm font-bold text-amber-700">{selectedProject.margin_pct}%</div>
+              <div className="flex items-center gap-1">
+                {isEditingMargin ? (
+                  <div className="flex items-center gap-1 w-full justify-between">
+                    <input
+                      type="text"
+                      value={marginInputValue}
+                      onChange={(e) => setMarginInputValue(e.target.value)}
+                      className="w-12 text-center bg-white border border-[var(--border2)] rounded text-xs py-0.5 outline-none font-semibold text-amber-900"
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleSaveMargin();
+                        if (e.key === 'Escape') setIsEditingMargin(false);
+                      }}
+                    />
+                    <span className="text-xs font-bold text-amber-700">%</span>
+                    <button
+                      onClick={handleSaveMargin}
+                      className="text-emerald-600 hover:text-emerald-700 p-0.5"
+                      title="Salvar"
+                    >
+                      <Check size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5 w-full justify-between">
+                    <span className="text-sm font-bold text-amber-700">
+                      {selectedProject.margin_pct != null 
+                        ? `${(selectedProject.margin_pct).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`
+                        : '—'}
+                    </span>
+                    <button
+                      onClick={() => {
+                        setMarginInputValue(String(selectedProject.margin_pct ?? 0));
+                        setIsEditingMargin(true);
+                      }}
+                      className="text-[var(--muted)] hover:text-amber-700 p-0.5 transition"
+                      title="Editar Margem"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
             <div className="bg-[#f7f3ff] p-2 rounded border border-violet-200">
               <div className="text-[10px] uppercase font-bold text-violet-700">Valor Contratado</div>
               <div className="text-sm font-bold text-violet-900">{brl(selectedProject.contracted_value)}</div>
             </div>
-            <div className="bg-[#eef7ff] p-2 rounded border border-sky-200">
-              <div className="text-[10px] uppercase font-bold text-sky-700">Valor Reajuste</div>
-              <div className="text-sm font-bold text-sky-900">{brl(selectedReajusteAmount)}</div>
-            </div>
             <div className="bg-[#e8f5e9] p-2 rounded border border-emerald-200">
               <div className="text-[10px] uppercase font-bold text-emerald-700">Valor Reajustado</div>
-              <div className="text-sm font-bold text-emerald-900">{brl(selectedReadjustedValue)}</div>
+              <div className="text-sm font-bold text-emerald-900">{brl(selectedProject.contracted_value)}</div>
             </div>
-            <div className="bg-purple-900/5 p-2 rounded border border-purple-500/20">
+            <div className="bg-[#eefcfc] p-2 rounded border border-teal-200">
+              <div className="text-[10px] uppercase font-bold text-teal-700">Lançado Navis</div>
+              <div className="text-sm font-bold text-teal-900">{brl(selectedProject.navis_launched_value)}</div>
+            </div>
+            <div className="bg-[#fdf4ff] p-2 rounded border border-purple-200">
               <div className="text-[10px] uppercase font-bold text-purple-700">Planejado Atual</div>
               <div className="text-sm font-bold text-purple-900">{brl(selectedProject.total_planned_value)}</div>
             </div>
@@ -528,26 +607,26 @@ export default function Faturamento() {
             <thead>
               <tr className="bg-[var(--surface3)] border-b border-[var(--border2)]">
                 <th className="py-2 text-left pl-4 font-bold text-[var(--muted)]">TIPO</th>
-                {stages.map(s => (
-                  <th key={s} className="py-2 font-bold text-[var(--muted)]">{s.toUpperCase()}</th>
+                {SUMMARY_COLUMNS.map(col => (
+                  <th key={col.key} className="py-2 font-bold text-[var(--muted)]">{col.label.toUpperCase()}</th>
                 ))}
                 <th className="py-2 font-bold text-[var(--text)]">TOTAL</th>
               </tr>
             </thead>
             <tbody>
-              <tr className="border-b border-[var(--border)]">
-                <td className="py-2 text-left pl-4 font-semibold text-[var(--text2)]">Original</td>
-                {stages.map(s => (
-                  <td key={s} className="py-2 text-[var(--text2)]">{brl(stageTotals[s].original)}</td>
-                ))}
-                <td className="py-2 font-bold text-[var(--text)]">{brl(totalOriginal)}</td>
-              </tr>
               <tr>
-                <td className="py-2 text-left pl-4 font-semibold text-[var(--text2)]">Atualizado</td>
-                {stages.map(s => (
-                  <td key={s} className="py-2 text-[var(--text2)]">{brl(stageTotals[s].updated)}</td>
-                ))}
-                <td className="py-2 font-bold text-teal-700">{brl(totalUpdated)}</td>
+                <td className="py-2 text-left pl-4 font-semibold text-[var(--text2)]">Valor Wrike</td>
+                {SUMMARY_COLUMNS.map(col => {
+                  const val = stageSummary ? stageSummary[col.key] : 0;
+                  return (
+                    <td key={col.key} className="py-2 text-[var(--text2)]">
+                      {formatStageValue(val)}
+                    </td>
+                  );
+                })}
+                <td className="py-2 font-bold text-teal-700">
+                  {formatStageValue(stageSummary?.total ?? 0)}
+                </td>
               </tr>
             </tbody>
           </table>
