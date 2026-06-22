@@ -76,27 +76,73 @@ const tasksColumns = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'
 
 function excelRowClass(task: Task): string {
   const classes = ['excel-data-row'];
+  
+  // 5. Para "Não Lançar", manter cinza e tachado.
+  if (task.launch_navis === 'Não Lançar' || task.text_style === 'tachado') {
+    classes.push('excel-row-disabled');
+    return classes.join(' ');
+  }
+  
   if (task.status_nf === 'Pago') {
     return classes.join(' ');
   }
-  if (task.line_color === 'azul' || task.status_nf === 'Enviar Nota') classes.push('excel-row-blue');
-  if (task.is_new_faturavel || task.name_changed || task.new_flag === 'NOVO' || task.change_indicator === 'verde') classes.push('excel-row-green');
-  if (task.launch_navis === 'Não Lançar' || task.text_style === 'tachado') classes.push('excel-row-disabled');
+  
+  // 2. Só aplicar VERDE quando flag_novo = "NOVO" ou quando name_changed = true vindo da view_task_comparisons.
+  // 3. Não usar check_mes para pintar de verde.
+  if (task.flag_novo === 'NOVO' || task.new_flag === 'NOVO' || task.name_changed) {
+    classes.push('excel-row-green');
+    return classes.join(' ');
+  }
+  
+  // 1. Se check_mes = "OK", aplicar destaque AZUL CLARO na linha/célula de data/status, pois significa parcela do mês atual.
+  if (task.check_mes === 'OK' || task.line_color === 'azul' || task.status_nf === 'Enviar Nota') {
+    classes.push('excel-row-blue');
+    return classes.join(' ');
+  }
+  
   return classes.join(' ');
 }
 
 function excelCellClass(task: Task, column: 'date' | 'value' | 'gap' | 'launch' | 'status' | 'activity' | 'etapa'): string {
   const classes = ['excel-cell'];
+  
   if (task.status_nf === 'Pago') {
     return classes.join(' ');
   }
-  if (column === 'date' && task.date_changed) classes.push('excel-cell-changed');
-  if (column === 'value' && task.value_changed) classes.push('excel-cell-changed');
-  if (column === 'gap' && task.gap_justification === 'Justificar GAP no Wrike') classes.push('excel-cell-gap');
-  if (column === 'launch' && task.launch_navis === 'Não Lançar') classes.push('excel-cell-muted');
-  if (column === 'status' && task.status_nf === 'Enviar Nota') classes.push('excel-cell-send-note');
-  if (column === 'activity' && task.additive_type) classes.push('excel-cell-additive');
-  if (column === 'etapa' && (task.is_new_faturavel || task.name_changed || task.new_flag === 'NOVO' || task.change_indicator === 'verde')) classes.push('excel-cell-new');
+  
+  // 4. Para alteração de data ou valor, aplicar vermelho conforme data_anterior/valor_anterior preenchidos ou date_changed/value_changed.
+  if (column === 'date' && (task.date_previous || task.date_changed)) {
+    classes.push('excel-cell-changed');
+    return classes.join(' ');
+  }
+  if (column === 'value' && (task.value_previous != null || task.value_changed)) {
+    classes.push('excel-cell-changed');
+    return classes.join(' ');
+  }
+  
+  if (column === 'gap' && task.gap_justification === 'Justificar GAP no Wrike') {
+    classes.push('excel-cell-gap');
+  }
+  if (column === 'launch' && task.launch_navis === 'Não Lançar') {
+    classes.push('excel-cell-muted');
+  }
+  if (column === 'status' && task.status_nf === 'Enviar Nota') {
+    classes.push('excel-cell-send-note');
+  }
+  if (column === 'activity' && task.additive_type) {
+    classes.push('excel-cell-additive');
+  }
+  
+  // 2. Só aplicar VERDE quando flag_novo = "NOVO" ou quando name_changed = true vindo da view_task_comparisons.
+  if (column === 'etapa' && (task.flag_novo === 'NOVO' || task.new_flag === 'NOVO' || task.name_changed)) {
+    classes.push('excel-cell-new');
+  }
+  
+  // 1. Se check_mes = "OK", aplicar destaque AZUL CLARO na linha/célula de data/status, pois significa parcela do mês atual.
+  if ((column === 'date' || column === 'status') && task.check_mes === 'OK') {
+    classes.push('excel-cell-blue');
+  }
+  
   return classes.join(' ');
 }
 

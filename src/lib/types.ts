@@ -102,6 +102,8 @@ export interface Task {
   value_changed?: boolean;
   name_changed?: boolean;
   is_new_faturavel?: boolean;
+  check_mes?: string | null;
+  flag_novo?: string | null;
 }
 
 export interface PreviousFlowRow {
@@ -129,6 +131,8 @@ export interface PreviousFlowRow {
   value_changed?: boolean;
   name_changed?: boolean;
   is_new_faturavel?: boolean;
+  check_mes?: string | null;
+  flag_novo?: string | null;
 }
 
 export interface RawTaskRow {

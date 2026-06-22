@@ -149,6 +149,8 @@ function mapTask(t: any): Task {
     value_changed: value_chg,
     name_changed: name_chg,
     is_new_faturavel: is_new,
+    check_mes: t.check_mes || null,
+    flag_novo: t.flag_novo || t.new_flag || null,
   };
 }
 
@@ -198,6 +200,8 @@ function mapPreviousFlowRow(row: any): PreviousFlowRow {
     value_changed: value_chg,
     name_changed: name_chg,
     is_new_faturavel: is_new,
+    check_mes: row.check_mes || null,
+    flag_novo: row.flag_novo || row.new_flag || null,
   };
 }
 
