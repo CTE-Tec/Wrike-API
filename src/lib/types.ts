@@ -193,6 +193,81 @@ export interface Integration {
   created_at: string;
 }
 
+export interface Cliente {
+  id: string;
+  cnpj: string;
+  razao_social: string;
+  nome_fantasia: string | null;
+  nome_empreendimento: string | null;
+  inscricao_estadual: string | null;
+  observacao_geral: string | null;
+  preenchedor_nome: string | null;
+  preenchedor_email: string | null;
+  cep: string | null;
+  logradouro: string | null;
+  numero: string | null;
+  complemento: string | null;
+  bairro: string | null;
+  cidade: string | null;
+  estado: string | null;
+  contato_tecnico_nome: string | null;
+  contato_tecnico_cargo: string | null;
+  contato_tecnico_telefone: string | null;
+  contato_tecnico_email: string | null;
+  contato_cobranca_nome: string | null;
+  contato_cobranca_telefone: string | null;
+  contato_cobranca_email: string | null;
+  projeto_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FaturamentoPerfil {
+  id: string;
+  cliente_id: string;
+  projeto_id: string | null;
+  cobranca_mesmo_endereco: boolean | null;
+  cobranca_endereco_completo: string | null;
+  cobranca_cep: string | null;
+  cobranca_cidade_uf: string | null;
+  cobranca_observacoes: string | null;
+  prazo_vencimento_dias: number | null;
+  janela_medicao_inicio: number | null;
+  janela_medicao_fim: number | null;
+  periodo_medicao_inicio: number | null;
+  periodo_medicao_fim: number | null;
+  has_purchase_order: boolean | null;
+  po_document_url: string | null;
+  data_inicio_obra: string | null;
+  data_fim_obra: string | null;
+  elaborar_contrato: boolean | null;
+  documentacao_necessaria: string[] | null;
+  faturamento_mesmos_dados: boolean | null;
+  faturamento_razao_social: string | null;
+  faturamento_cnpj: string | null;
+  faturamento_inscricao_estadual: string | null;
+  faturamento_endereco: string | null;
+  faturamento_cep: string | null;
+  faturamento_cidade_uf: string | null;
+  faturamento_obs_nf: string | null;
+  necessita_art: boolean | null;
+  art_mesmos_dados: boolean | null;
+  art_razao_social: string | null;
+  art_cnpj: string | null;
+  art_endereco: string | null;
+  art_cep: string | null;
+  art_cidade_uf: string | null;
+  art_endereco_obra: string | null;
+  art_cep_obra: string | null;
+  art_cidade_estado_obra: string | null;
+  art_area_construida: number | null;
+  art_finalidade_obra: string | null;
+  art_autorizacao_art: boolean | null;
+  feedback_nota: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export const STATUS_LABELS: Record<TaskStatus, string> = {
   fat: 'Faturar',
   vis: 'Visualização',

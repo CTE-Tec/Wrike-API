@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { FileSpreadsheet, LogOut, ChevronDown, FolderClosed, Search } from 'lucide-react';
+import { FileSpreadsheet, LogOut, ChevronDown, FolderClosed, Search, Users } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { showToast } from './Toast';
 import { useState, useEffect } from 'react';
@@ -48,6 +48,10 @@ export default function Sidebar() {
         <Link href="/faturamento" className={navLinkClass('/faturamento', pathname)}>
           <FileSpreadsheet size={13} className="nav-icon text-emerald-500" />
           <span className="font-semibold text-emerald-400">Início</span>
+        </Link>
+        <Link href="/clientes" className={navLinkClass('/clientes', pathname)}>
+          <Users size={13} className="nav-icon text-sky-500" />
+          <span className="font-semibold text-sky-400">Clientes</span>
         </Link>
       </div>
 

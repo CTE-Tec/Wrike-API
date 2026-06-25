@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { supabase } from './supabase';
 import { mockProjects, mockTasks, mockInboxMessages, mockIntegrations } from './mockData';
-import type { Project, Task, TaskStatus, InboxMessage, Integration, BillingProfile, ContractDetails, PreviousFlowRow, RawTaskRow, ReajusteHistory, ProjectStageSummary } from './types';
+import type { Project, Task, TaskStatus, InboxMessage, Integration, BillingProfile, ContractDetails, PreviousFlowRow, RawTaskRow, ReajusteHistory, ProjectStageSummary, Cliente, FaturamentoPerfil } from './types';
 
 // Set strictly to false only if explicitly configured as 'false'
 const useMockData = process.env.NEXT_PUBLIC_USE_MOCKS !== 'false';
@@ -911,6 +911,103 @@ export async function updateProjectMargin(projectId: string, marginPct: number):
 
   if (error) {
     console.error('Failed to update project margin:', error);
+    throw error;
+  }
+}
+
+// Clientes Functions
+export async function fetchClientes(page: number = 1, pageSize: number = 10, search?: string): Promise<{ data: Cliente[]; total: number }> {
+  if (!supabase) throw new Error('Supabase client is not initialized.');
+
+  try {
+    let query = supabase.from('clientes').select('*', { count: 'exact' });
+
+    if (search) {
+      query = query.or(`razao_social.ilike.%${search}%,nome_fantasia.ilike.%${search}%,cnpj.ilike.%${search}%`);
+    }
+
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+
+    const { data, count, error } = await query.range(from, to).order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Failed to fetch clientes:', error);
+      throw error;
+    }
+
+    return {
+      data: data as Cliente[],
+      total: count || 0,
+    };
+  } catch (error) {
+    console.error('Error fetching clientes:', error);
+    throw error;
+  }
+}
+
+export async function fetchClienteById(clienteId: string): Promise<Cliente | null> {
+  if (!supabase) throw new Error('Supabase client is not initialized.');
+
+  try {
+    const { data, error } = await supabase
+      .from('clientes')
+      .select('*')
+      .eq('id', clienteId)
+      .single();
+
+    if (error && error.code !== 'PGRST116') {
+      console.error('Failed to fetch cliente:', error);
+      throw error;
+    }
+
+    return (data as Cliente) || null;
+  } catch (error) {
+    console.error('Error fetching cliente by id:', error);
+    throw error;
+  }
+}
+
+export async function fetchFaturamentoPerfilByClienteId(clienteId: string): Promise<FaturamentoPerfil | null> {
+  if (!supabase) throw new Error('Supabase client is not initialized.');
+
+  try {
+    const { data, error } = await supabase
+      .from('faturamento_perfis')
+      .select('*')
+      .eq('cliente_id', clienteId)
+      .single();
+
+    if (error && error.code !== 'PGRST116') {
+      console.error('Failed to fetch faturamento perfil:', error);
+      throw error;
+    }
+
+    return (data as FaturamentoPerfil) || null;
+  } catch (error) {
+    console.error('Error fetching faturamento perfil:', error);
+    throw error;
+  }
+}
+
+export async function fetchClientesByProjetoId(projetoId: string): Promise<Cliente[]> {
+  if (!supabase) throw new Error('Supabase client is not initialized.');
+
+  try {
+    const { data, error } = await supabase
+      .from('clientes')
+      .select('*')
+      .eq('projeto_id', projetoId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Failed to fetch clientes by projeto:', error);
+      throw error;
+    }
+
+    return (data as Cliente[]) || [];
+  } catch (error) {
+    console.error('Error fetching clientes by projeto:', error);
     throw error;
   }
 }
