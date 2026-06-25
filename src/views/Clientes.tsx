@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { fetchClientes, brl } from '../lib/data';
+import { fetchClientes } from '../lib/data';
 import { showToast } from '../components/Toast';
 import type { Cliente } from '../lib/types';
 import Layout from '../components/Layout';
@@ -16,12 +16,6 @@ function formatCNPJ(cnpj: string): string {
 function formatPhone(phone: string | null): string {
   if (!phone) return '—';
   return phone.replace(/^(\d{2})(\d{4,5})(\d{4})$/, '($1) $2-$3');
-}
-
-function formatAddress(cliente: Cliente): string {
-  const parts = [cliente.logradouro, cliente.numero, cliente.complemento, cliente.bairro, cliente.cidade, cliente.estado]
-    .filter(Boolean);
-  return parts.length > 0 ? parts.join(', ') : '—';
 }
 
 export default function Clientes() {
@@ -50,7 +44,7 @@ export default function Clientes() {
 
   useEffect(() => {
     loadClientes(currentPage, pageSize, searchQuery);
-  }, [currentPage, pageSize, loadClientes]);
+  }, [currentPage, pageSize, searchQuery, loadClientes]);
 
   const handleSearch = (value: string) => {
     setSearchQuery(value);
