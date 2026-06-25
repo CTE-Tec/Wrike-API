@@ -76,7 +76,7 @@ export default function ClienteDetalhes() {
         setIsLoading(true);
 
         if (!clienteId) {
-          showToast('ID do cliente não encontrado', 'error');
+          showToast('AlertCircle', 'Erro', 'ID do cliente não encontrado');
           return;
         }
 
@@ -105,7 +105,7 @@ export default function ClienteDetalhes() {
         }
       } catch (error) {
         console.error('Error loading cliente details:', error);
-        showToast('Erro ao carregar detalhes do cliente', 'error');
+        showToast('AlertCircle', 'Erro', 'Erro ao carregar detalhes do cliente');
       } finally {
         setIsLoading(false);
       }

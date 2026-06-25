@@ -36,7 +36,7 @@ export default function Clientes() {
       setTotalClientes(result.total);
     } catch (error) {
       console.error('Error loading clientes:', error);
-      showToast('Erro ao carregar clientes', 'error');
+      showToast('AlertCircle', 'Erro', 'Erro ao carregar clientes');
     } finally {
       setIsLoading(false);
     }
