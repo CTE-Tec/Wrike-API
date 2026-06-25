@@ -82,7 +82,7 @@ export default function ClienteDetalhes() {
 
         const clienteData = await fetchClienteById(clienteId);
         if (!clienteData) {
-          showToast('Cliente não encontrado', 'error');
+          showToast('AlertCircle', 'Erro', 'Cliente não encontrado');
           router.push('/clientes');
           return;
         }
