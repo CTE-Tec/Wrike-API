@@ -916,14 +916,35 @@ export async function updateProjectMargin(projectId: string, marginPct: number):
 }
 
 // Clientes Functions
-export async function fetchClientes(page: number = 1, pageSize: number = 10, search?: string): Promise<{ data: Cliente[]; total: number }> {
+export async function fetchClientes(
+  page: number = 1,
+  pageSize: number = 10,
+  search?: string,
+  statusForm?: string | null,
+  janelaStart?: number | null,
+  janelaEnd?: number | null,
+): Promise<{ data: Cliente[]; total: number }> {
   if (!supabase) throw new Error('Supabase client is not initialized.');
 
   try {
-    let query = supabase.from('clientes').select('*', { count: 'exact' });
+    // Select client fields and join the related faturamento_perfis (if any)
+    let query = supabase
+      .from('clientes')
+      .select('*, faturamento_perfis(status_formulario, janela_medicao_inicio, janela_medicao_fim)', { count: 'exact' });
 
     if (search) {
       query = query.or(`razao_social.ilike.%${search}%,nome_fantasia.ilike.%${search}%,cnpj.ilike.%${search}%`);
+    }
+
+    // Apply filters on the joined faturamento_perfis fields when provided
+    if (statusForm) {
+      query = query.eq('faturamento_perfis.status_formulario', statusForm);
+    }
+    if (janelaStart != null) {
+      query = query.gte('faturamento_perfis.janela_medicao_inicio', janelaStart);
+    }
+    if (janelaEnd != null) {
+      query = query.lte('faturamento_perfis.janela_medicao_fim', janelaEnd);
     }
 
     const from = (page - 1) * pageSize;
@@ -936,8 +957,26 @@ export async function fetchClientes(page: number = 1, pageSize: number = 10, sea
       throw error;
     }
 
+    // Map joined faturamento_perfis into top-level convenient fields
+    const mapped = (data ?? []).map((row: any) => {
+      const client: any = { ...row };
+      const fp = row.faturamento_perfis && Array.isArray(row.faturamento_perfis) ? row.faturamento_perfis[0] : row.faturamento_perfis || null;
+      if (fp) {
+        client.faturamento_status_formulario = fp.status_formulario ?? null;
+        client.janela_medicao_inicio = fp.janela_medicao_inicio ?? null;
+        client.janela_medicao_fim = fp.janela_medicao_fim ?? null;
+      } else {
+        client.faturamento_status_formulario = null;
+        client.janela_medicao_inicio = null;
+        client.janela_medicao_fim = null;
+      }
+      // remove nested array to keep shape small
+      delete client.faturamento_perfis;
+      return client as Cliente;
+    });
+
     return {
-      data: data as Cliente[],
+      data: mapped,
       total: count || 0,
     };
   } catch (error) {

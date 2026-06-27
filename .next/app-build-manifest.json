@@ -11,20 +11,25 @@
       "static/chunks/main-app.js",
       "static/chunks/app/not-found.js"
     ],
-    "/clientes/[id]/page": [
+    "/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/clientes/[id]/page.js"
+      "static/chunks/app/page.js"
+    ],
+    "/faturamento/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/faturamento/page.js"
     ],
     "/clientes/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/clientes/page.js"
     ],
-    "/faturamento/page": [
+    "/clientes/[id]/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/faturamento/page.js"
+      "static/chunks/app/clientes/[id]/page.js"
     ]
   }
 }

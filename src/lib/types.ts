@@ -220,6 +220,10 @@ export interface Cliente {
   projeto_id: string | null;
   created_at: string;
   updated_at: string;
+  // joined faturamento_perfil fields for list view convenience
+  faturamento_status_formulario?: string | null;
+  janela_medicao_inicio?: number | null;
+  janela_medicao_fim?: number | null;
 }
 
 export interface FaturamentoPerfil {

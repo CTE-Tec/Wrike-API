@@ -27,11 +27,21 @@ export default function Clientes() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string>('');
+  const [janelaStart, setJanelaStart] = useState<number | ''>('');
+  const [janelaEnd, setJanelaEnd] = useState<number | ''>('');
 
   const loadClientes = useCallback(async (page: number, size: number, search: string) => {
     try {
       setIsLoading(true);
-      const result = await fetchClientes(page, size, search || undefined);
+      const result = await fetchClientes(
+        page,
+        size,
+        search || undefined,
+        statusFilter || null,
+        typeof janelaStart === 'number' ? janelaStart : null,
+        typeof janelaEnd === 'number' ? janelaEnd : null,
+      );
       setClientes(result.data);
       setTotalClientes(result.total);
     } catch (error) {
@@ -40,11 +50,11 @@ export default function Clientes() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [statusFilter, janelaStart, janelaEnd]);
 
   useEffect(() => {
     loadClientes(currentPage, pageSize, searchQuery);
-  }, [currentPage, pageSize, searchQuery, loadClientes]);
+  }, [currentPage, pageSize, searchQuery, statusFilter, janelaStart, janelaEnd, loadClientes]);
 
   const handleSearch = (value: string) => {
     setSearchQuery(value);
@@ -107,6 +117,17 @@ export default function Clientes() {
               />
             </div>
           </div>
+          <div style={{ display: 'flex', gap: '8px', marginLeft: '12px', alignItems: 'center' }}>
+            <select value={statusFilter} onChange={(e) => { setStatusFilter(e.currentTarget.value); setCurrentPage(1); }} style={{ padding: '4px 8px', borderRadius: '5px', border: '1px solid #dde3ea', background: '#fff' }}>
+              <option value="">Todos status</option>
+              <option value="pendente">pendente</option>
+              <option value="enviado">enviado</option>
+              <option value="respondido">respondido</option>
+              <option value="concluido">concluido</option>
+            </select>
+            <input placeholder="Janela início" type="number" value={janelaStart} onChange={(e) => { setJanelaStart(e.currentTarget.value === '' ? '' : Number(e.currentTarget.value)); setCurrentPage(1); }} style={{ width: '110px', padding: '4px 8px', borderRadius: '5px', border: '1px solid #dde3ea', background: '#fff' }} />
+            <input placeholder="Janela fim" type="number" value={janelaEnd} onChange={(e) => { setJanelaEnd(e.currentTarget.value === '' ? '' : Number(e.currentTarget.value)); setCurrentPage(1); }} style={{ width: '110px', padding: '4px 8px', borderRadius: '5px', border: '1px solid #dde3ea', background: '#fff' }} />
+          </div>
         </div>
 
 
@@ -126,30 +147,22 @@ export default function Clientes() {
               <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid #dde3ea', background: '#f5f7fa' }}>
+                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#4a6478', textTransform: 'uppercase', letterSpacing: '.05em' }}>Preenchedor</th>
                     <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#4a6478', textTransform: 'uppercase', letterSpacing: '.05em' }}>Razão Social</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#4a6478', textTransform: 'uppercase', letterSpacing: '.05em' }}>Nome Fantasia</th>
                     <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#4a6478', textTransform: 'uppercase', letterSpacing: '.05em' }}>CNPJ</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#4a6478', textTransform: 'uppercase', letterSpacing: '.05em' }}>Cidade/UF</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#4a6478', textTransform: 'uppercase', letterSpacing: '.05em' }}>Contato Técnico</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#4a6478', textTransform: 'uppercase', letterSpacing: '.05em' }}>Telefone</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#4a6478', textTransform: 'uppercase', letterSpacing: '.05em' }}>Status</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#4a6478', textTransform: 'uppercase', letterSpacing: '.05em' }}>Janela Medição</th>
                     <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: 600, color: '#4a6478', textTransform: 'uppercase', letterSpacing: '.05em' }}>Ações</th>
                   </tr>
                 </thead>
                 <tbody>
                   {clientes.map((cliente) => (
-                    <tr key={cliente.id} style={{ borderBottom: '1px solid #edf0f4', transition: 'background-color .11s', cursor: 'pointer' }} onMouseEnter={(e) => e.currentTarget.style.background = '#f5f7fa'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+                    <tr key={cliente.id} style={{ borderBottom: '1px solid #edf0f4', transition: 'background-color .11s' }} onMouseEnter={(e) => e.currentTarget.style.background = '#f5f7fa'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+                      <td style={{ padding: '12px 16px', color: '#1a2e3b', fontWeight: 500 }}>{cliente.preenchedor_nome || '—'}</td>
                       <td style={{ padding: '12px 16px', color: '#1a2e3b', fontWeight: 500 }}>{cliente.razao_social}</td>
-                      <td style={{ padding: '12px 16px', color: '#4a6478' }}>{cliente.nome_fantasia || '—'}</td>
                       <td style={{ padding: '12px 16px', color: '#4a6478', fontFamily: 'monospace', fontSize: '12px' }}>{formatCNPJ(cliente.cnpj)}</td>
-                      <td style={{ padding: '12px 16px', color: '#4a6478' }}>
-                        {cliente.cidade && cliente.estado ? `${cliente.cidade}/${cliente.estado}` : '—'}
-                      </td>
-                      <td style={{ padding: '12px 16px', color: '#4a6478', fontSize: '13px' }}>
-                        {cliente.contato_tecnico_nome || '—'}
-                      </td>
-                      <td style={{ padding: '12px 16px', color: '#4a6478', fontFamily: 'monospace', fontSize: '12px' }}>
-                        {formatPhone(cliente.contato_cobranca_telefone)}
-                      </td>
+                      <td style={{ padding: '12px 16px', color: '#4a6478' }}>{cliente.faturamento_status_formulario || '—'}</td>
+                      <td style={{ padding: '12px 16px', color: '#4a6478' }}>{cliente.janela_medicao_inicio != null && cliente.janela_medicao_fim != null ? `${cliente.janela_medicao_inicio}–${cliente.janela_medicao_fim}` : '—'}</td>
                       <td style={{ padding: '12px 16px', textAlign: 'center' }}>
                         <button
                           onClick={() => handleViewDetalhes(cliente.id)}
