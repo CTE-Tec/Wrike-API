@@ -212,9 +212,9 @@ export default function ClienteDetalhes() {
           </Section>
         </div>
 
-        {/* Preenchedor */}
+        {/* Ponto Focal */}
         {(cliente.preenchedor_nome || cliente.preenchedor_email) && (
-          <Section title="Informações de Preenchimento">
+          <Section title="Ponto Focal">
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <InfoRow label="Nome" value={cliente.preenchedor_nome || '—'} />
               <InfoRow label="Email" value={cliente.preenchedor_email || '—'} icon={<Mail size={16} />} />

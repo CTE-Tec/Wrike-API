@@ -143,7 +143,7 @@ export default function Clientes() {
               <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid #dde3ea', background: '#f5f7fa' }}>
-                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#4a6478', textTransform: 'uppercase', letterSpacing: '.05em' }}>Preenchedor</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#4a6478', textTransform: 'uppercase', letterSpacing: '.05em' }}>Ponto Focal</th>
                     <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#4a6478', textTransform: 'uppercase', letterSpacing: '.05em' }}>Razão Social</th>
                     <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#4a6478', textTransform: 'uppercase', letterSpacing: '.05em' }}>CNPJ</th>
                     <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#4a6478', textTransform: 'uppercase', letterSpacing: '.05em' }}>Status</th>
