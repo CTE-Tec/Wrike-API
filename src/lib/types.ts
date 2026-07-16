@@ -220,6 +220,10 @@ export interface Cliente {
   projeto_id: string | null;
   created_at: string;
   updated_at: string;
+  isento_inscricao_estadual?: boolean | null;
+  observacao_inscricao_estadual?: string | null;
+  contatos_cobranca?: any | null;
+  contatos_medicao?: any | null;
   // joined faturamento_perfil fields for list view convenience
   faturamento_status_formulario?: string | null;
   janela_medicao_inicio?: number | null;
@@ -270,6 +274,9 @@ export interface FaturamentoPerfil {
   feedback_nota: number | null;
   created_at: string;
   updated_at: string;
+  status_formulario?: string | null;
+  forma_pagamento?: string | null;
+  condicoes_pagamento_obs?: string | null;
 }
 
 export const STATUS_LABELS: Record<TaskStatus, string> = {

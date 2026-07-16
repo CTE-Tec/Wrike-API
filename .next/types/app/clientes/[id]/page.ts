@@ -1,4 +1,4 @@
-// File: C:\Users\gugum\Wrike-API\src\app\clientes\[id]\page.tsx
+// File: C:\Users\GustavoSantos\Downloads\Wrike-API-1\src\app\clientes\[id]\page.tsx
 import * as entry from '../../../../../src/app/clientes/[id]/page.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 
