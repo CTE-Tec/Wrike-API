@@ -193,6 +193,13 @@ export interface Integration {
   created_at: string;
 }
 
+export interface ContatoItem {
+  nome: string;
+  email?: string;
+  telefone?: string;
+  cargo?: string;
+}
+
 export interface Cliente {
   id: string;
   cnpj: string;
@@ -222,8 +229,8 @@ export interface Cliente {
   updated_at: string;
   isento_inscricao_estadual?: boolean | null;
   observacao_inscricao_estadual?: string | null;
-  contatos_cobranca?: any | null;
-  contatos_medicao?: any | null;
+  contatos_cobranca?: ContatoItem[] | string | null;
+  contatos_medicao?: ContatoItem[] | string | null;
   // joined faturamento_perfil fields for list view convenience
   faturamento_status_formulario?: string | null;
   janela_medicao_inicio?: number | null;

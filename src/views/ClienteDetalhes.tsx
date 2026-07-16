@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { fetchClienteById, fetchFaturamentoPerfilByClienteId, fetchProjects } from '../lib/data';
 import { showToast } from '../components/Toast';
-import type { Cliente, FaturamentoPerfil, Project } from '../lib/types';
+import type { Cliente, ContatoItem, FaturamentoPerfil, Project } from '../lib/types';
 import Layout from '../components/Layout';
 import { ArrowLeft, Loader, Phone, Mail, Building2, User, FileText, AlertCircle, Clock, DollarSign } from 'lucide-react';
 
@@ -22,12 +22,12 @@ function formatPhone(phone: string | null): string {
   return clean.replace(/^(\d{2})(\d{4})(\d{4})$/, '($1) $2-$3');
 }
 
-function parseJSONB(value: any) {
+function parseJSONB(value: ContatoItem[] | string | null | undefined): ContatoItem[] {
   if (!value) return [];
   if (Array.isArray(value)) return value;
   try {
     return typeof value === 'string' ? JSON.parse(value) : [];
-  } catch (e) {
+  } catch {
     return [];
   }
 }
@@ -256,7 +256,7 @@ export default function ClienteDetalhes() {
                     {getMedicaoContacts().length === 0 ? (
                       <span style={{ fontSize: '12px', color: '#8099ae', fontStyle: 'italic' }}>Nenhum contato cadastrado</span>
                     ) : (
-                      getMedicaoContacts().map((c: any, idx: number) => (
+                      getMedicaoContacts().map((c: ContatoItem, idx: number) => (
                         <div key={idx} style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #edf0f4', background: '#f8fafc' }}>
                           <div style={{ fontWeight: 600, color: '#1a2e3b', fontSize: '12px', marginBottom: '4px' }}>{c.nome}</div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '11px', color: '#4a6478' }}>
@@ -288,7 +288,7 @@ export default function ClienteDetalhes() {
                     {getCobrancaContacts().length === 0 ? (
                       <span style={{ fontSize: '12px', color: '#8099ae', fontStyle: 'italic' }}>Nenhum contato cadastrado</span>
                     ) : (
-                      getCobrancaContacts().map((c: any, idx: number) => (
+                      getCobrancaContacts().map((c: ContatoItem, idx: number) => (
                         <div key={idx} style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #edf0f4', background: '#f8fafc' }}>
                           <div style={{ fontWeight: 600, color: '#1a2e3b', fontSize: '12px', marginBottom: '4px' }}>{c.nome}</div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '11px', color: '#4a6478' }}>
