@@ -71,6 +71,11 @@ export interface Project {
   rotulo_2?: string;
   billing_profile?: BillingProfile | null;
   contract_details?: ContractDetails | null;
+  latest_status_event?: {
+    action_type: string;
+    actor_name: string;
+    created_at: string;
+  } | null;
 }
 
 export interface Task {

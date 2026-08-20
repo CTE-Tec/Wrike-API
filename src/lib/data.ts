@@ -228,6 +228,16 @@ function mapRawTaskRow(row: any): RawTaskRow {
 
 export async function fetchProjects(): Promise<Project[]> {
   if (useMockData) {
+    if (typeof window !== 'undefined') {
+      mockProjects.forEach(p => {
+        const stored = localStorage.getItem(`mock_latest_event_${p.id}`);
+        if (stored) {
+          p.latest_status_event = JSON.parse(stored);
+        } else {
+          p.latest_status_event = null;
+        }
+      });
+    }
     return mockProjects;
   }
 
@@ -280,6 +290,33 @@ export async function fetchProjects(): Promise<Project[]> {
       }
     } catch (e) {
       console.warn('Could not load billing profiles:', e);
+    }
+  }
+
+  // Attempt to load latest status events separately
+  if (supabase && projects.length > 0) {
+    try {
+      const { data: eventData } = await supabase
+        .from('project_status_events')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (eventData) {
+        projects.forEach(p => {
+          const latestEvent = eventData.find(e => e.project_id === p.id);
+          if (latestEvent) {
+            p.latest_status_event = {
+              action_type: latestEvent.action_type,
+              actor_name: latestEvent.actor_name,
+              created_at: latestEvent.created_at
+            };
+          } else {
+            p.latest_status_event = null;
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('Could not load project status events:', e);
     }
   }
 
@@ -547,40 +584,90 @@ export async function updateTaskFieldInDb(taskId: string, field: string, value: 
   }
 }
 
-export async function projectActionInDb(projectId: string, action: 'medido' | 'faturado' | 'pago'): Promise<void> {
-  if (useMockData) return;
+export async function projectActionInDb(projectId: string, action: 'medido' | 'faturado' | 'pago' | 'navis', actorEmail?: string): Promise<void> {
+  if (useMockData) {
+    if (typeof window !== 'undefined') {
+      const mockEvent = {
+        action_type: action === 'medido' ? 'measurements_sent' : action === 'faturado' ? 'invoices_sent' : action === 'navis' ? 'navis_updated' : 'paid',
+        actor_name: actorEmail || 'financeiro@cte.com.br',
+        created_at: new Date().toISOString()
+      };
+      localStorage.setItem(`mock_latest_event_${projectId}`, JSON.stringify(mockEvent));
+    }
+    return;
+  }
   if (!supabase) throw new Error('Supabase client is not initialized.');
 
-  let status = 'Concluído';
-  let statusNf = 'Concluído';
-  if (action === 'faturado') {
+  let status: string | null = null;
+  let statusNf: string | null = null;
+  if (action === 'medido') {
+    status = 'Concluído';
+    statusNf = 'Concluído';
+  } else if (action === 'faturado') {
     status = 'Nota Enviada';
     statusNf = 'Nota Enviada';
-  }
-  if (action === 'pago') {
+  } else if (action === 'pago') {
     status = 'Pago';
     statusNf = 'Pago';
   }
 
-  const { error: taskError } = await supabase
-    .from('tasks')
-    .update({ status, status_nf: statusNf })
-    .eq('project_id', projectId);
+  if (status && statusNf) {
+    const { error: taskError } = await supabase
+      .from('tasks')
+      .update({ status, status_nf: statusNf })
+      .eq('project_id', projectId);
 
-  if (taskError) {
-    console.error(`Failed to update task statuses for project ${projectId}:`, taskError);
-    throw taskError;
+    if (taskError) {
+      console.error(`Failed to update task statuses for project ${projectId}:`, taskError);
+      throw taskError;
+    }
   }
+
+  let actionType = 'paid';
+  if (action === 'medido') actionType = 'measurements_sent';
+  else if (action === 'faturado') actionType = 'invoices_sent';
+  else if (action === 'navis') actionType = 'navis_updated';
+
+  const actor = actorEmail || 'Líder Admin';
 
   try {
     const { error: eventError } = await supabase
       .from('project_status_events')
-      .insert([{ project_id: projectId, action_type: action === 'medido' ? 'measurements_sent' : action === 'faturado' ? 'invoices_sent' : 'paid', actor_name: 'Líder Admin', created_at: new Date().toISOString() }]);
+      .insert([{ project_id: projectId, action_type: actionType, actor_name: actor, created_at: new Date().toISOString() }]);
     if (eventError) {
       console.warn('Could not insert project status event, continuing:', eventError);
     }
   } catch (e) {
     console.warn('project_status_events missing or insert failed, ignoring:', e);
+  }
+}
+
+export async function fetchLatestProjectEvent(projectId: string): Promise<{ action_type: string; actor_name: string; created_at: string } | null> {
+  if (useMockData) {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(`mock_latest_event_${projectId}`);
+      if (stored) return JSON.parse(stored);
+    }
+    return null;
+  }
+  if (!supabase) return null;
+
+  try {
+    const { data, error } = await supabase
+      .from('project_status_events')
+      .select('action_type, actor_name, created_at')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (error) {
+      console.error('Failed to fetch latest project status event:', error);
+      return null;
+    }
+    return data && data.length > 0 ? data[0] : null;
+  } catch (e) {
+    console.warn('project_status_events missing or query failed, ignoring:', e);
+    return null;
   }
 }
 

@@ -2,13 +2,14 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { fetchProjects, fetchTasks, fetchPreviousFlowRows, fetchRawTaskRows, fetchReajusteHistory, brl, updateTaskFieldInDb, projectActionInDb, approveFlowInDb, applyReajusteInDb, releaseFlowInDb, requestFlowReviewInDb, fetchProjectStageSummary, updateProjectMargin } from '../lib/data';
+import { fetchProjects, fetchTasks, fetchPreviousFlowRows, fetchRawTaskRows, fetchReajusteHistory, brl, updateTaskFieldInDb, projectActionInDb, approveFlowInDb, applyReajusteInDb, releaseFlowInDb, requestFlowReviewInDb, fetchProjectStageSummary, updateProjectMargin, fetchLatestProjectEvent } from '../lib/data';
 import { showToast } from '../components/Toast';
 import type { Project, Task, TaskStatus, PreviousFlowRow, RawTaskRow, ReajusteHistory, ProjectStageSummary } from '../lib/types';
 import { STATUS_LABELS } from '../lib/types';
 import Layout from '../components/Layout';
 import Modal from '../components/Modal';
 import { Search, AlertOctagon, Check, FileSpreadsheet, ArrowUpDown } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 type WorkbookTab = 'tasks' | 'mes-atual' | 'mes-anterior' | 'planejado';
 
@@ -157,7 +158,7 @@ export default function Faturamento() {
   const [rawTaskRows, setRawTaskRows] = useState<RawTaskRow[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>(projectIdParam || '');
   const [activeSheet, setActiveSheet] = useState<WorkbookTab>('mes-atual');
-  const [filter, setFilter] = useState<TaskStatus | 'all' | 'critical'>('all');
+  const [filter, setFilter] = useState<TaskStatus | 'all'>('all');
   const [search, setSearch] = useState('');
   const [showReajusteModal, setShowReajusteModal] = useState(false);
   const [reajusteIndex, setReajusteIndex] = useState<'INCC-M' | 'IPC'>('INCC-M');
@@ -170,7 +171,35 @@ export default function Faturamento() {
   const [rawPageSize, setRawPageSize] = useState(25);
   const [currentPreviousPage, setCurrentPreviousPage] = useState(1);
   const [previousPageSize, setPreviousPageSize] = useState(25);
-  const [taskDateSortDirection, setTaskDateSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [taskSortConfig, setTaskSortConfig] = useState<{ key: keyof Task | 'value' | 'due_date'; direction: 'asc' | 'desc' } | null>({ key: 'due_date', direction: 'asc' });
+  const [taskColFilters, setTaskColFilters] = useState({
+    etapa: '',
+    name: '',
+    navis_num: '',
+    value: '',
+    due_date: '',
+    status_nf: 'all',
+    pagamento: 'all',
+    date_previous: '',
+    value_previous: '',
+    gap_justification: '',
+    launch_navis: 'all'
+  });
+
+  const [currentUserEmail, setCurrentUserEmail] = useState<string>('financeiro@cte.com.br');
+  const [latestEvent, setLatestEvent] = useState<{ action_type: string; actor_name: string; created_at: string } | null>(null);
+
+  useEffect(() => {
+    async function getAuthUser() {
+      if (supabase) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user?.email) {
+          setCurrentUserEmail(session.user.email);
+        }
+      }
+    }
+    getAuthUser();
+  }, []);
 
   const load = useCallback(async () => {
     const [p, t] = await Promise.all([fetchProjects(), fetchTasks()]);
@@ -198,11 +227,12 @@ export default function Faturamento() {
 
     async function loadWorkbookSheets() {
       try {
-        const [previousRows, rawRows, historyRows, summaryRow] = await Promise.all([
+        const [previousRows, rawRows, historyRows, summaryRow, latestProjectEvent] = await Promise.all([
           fetchPreviousFlowRows(selectedProjectId),
           fetchRawTaskRows(selectedProjectId),
           fetchReajusteHistory(selectedProjectId),
           fetchProjectStageSummary(selectedProjectId),
+          fetchLatestProjectEvent(selectedProjectId),
         ]);
 
         if (!cancelled) {
@@ -210,6 +240,7 @@ export default function Faturamento() {
           setRawTaskRows(rawRows);
           setReajusteHistory(historyRows);
           setStageSummary(summaryRow);
+          setLatestEvent(latestProjectEvent);
         }
       } catch (e) {
         console.error(e);
@@ -218,6 +249,7 @@ export default function Faturamento() {
           setRawTaskRows([]);
           setReajusteHistory([]);
           setStageSummary(null);
+          setLatestEvent(null);
         }
       }
     }
@@ -249,15 +281,18 @@ export default function Faturamento() {
     }
   };
 
-  const handleProjectAction = async (projectId: string, action: 'medido' | 'faturado' | 'pago') => {
+  const handleProjectAction = async (projectId: string, action: 'medido' | 'faturado' | 'pago' | 'navis') => {
     try {
-      await projectActionInDb(projectId, action);
+      await projectActionInDb(projectId, action, currentUserEmail);
       await load();
+      const updatedEvent = await fetchLatestProjectEvent(projectId);
+      setLatestEvent(updatedEvent);
       
       const labels = {
         medido: 'Medições enviadas (status atualizado no Wrike)',
         faturado: 'Notas faturadas (faturamento enviado)',
-        pago: 'Confirmado pagamento (fluxo concluído)'
+        pago: 'Confirmado pagamento (fluxo concluído)',
+        navis: 'Lançamentos no Navis atualizados'
       };
       showToast('⚡', 'Ação do Projeto Executada', labels[action], 'tg');
     } catch (e) {
@@ -347,28 +382,71 @@ export default function Faturamento() {
   const projectTasks = tasks.filter(t => t.project_id === selectedProject.id);
 
   const filteredTasks = projectTasks.filter(t => {
-    if (filter === 'critical') {
-      if (!selectedProject.is_critical) return false;
-    } else if (filter !== 'all' && t.status !== filter) {
+    // 1. Global filter
+    if (filter !== 'all' && t.status !== filter) {
       return false;
     }
     if (search) {
       const term = search.toLowerCase();
-      return t.name.toLowerCase().includes(term) || t.etapa.toLowerCase().includes(term);
+      const matchesSearch = t.name.toLowerCase().includes(term) || t.etapa.toLowerCase().includes(term);
+      if (!matchesSearch) return false;
     }
-    return true;
+
+    // 2. Column filters
+    const matchesEtapa = taskColFilters.etapa === '' || t.etapa.toLowerCase().includes(taskColFilters.etapa.toLowerCase());
+    const matchesName = taskColFilters.name === '' || t.name.toLowerCase().includes(taskColFilters.name.toLowerCase());
+    const matchesNavis = taskColFilters.navis_num === '' || t.navis_num.toLowerCase().includes(taskColFilters.navis_num.toLowerCase());
+    const matchesValue = taskColFilters.value === '' || String(t.value).includes(taskColFilters.value) || brl(t.value).includes(taskColFilters.value);
+    
+    const formattedDate = t.due_date ? t.due_date.split('T')[0] : '';
+    const matchesDate = taskColFilters.due_date === '' || formattedDate.includes(taskColFilters.due_date);
+
+    const matchesStatusNf = taskColFilters.status_nf === 'all' || t.status_nf === taskColFilters.status_nf;
+    const matchesPagamento = taskColFilters.pagamento === 'all' || t.pagamento === taskColFilters.pagamento;
+
+    const formattedDatePrev = t.date_previous ? t.date_previous.split('T')[0] : '';
+    const matchesDatePrev = taskColFilters.date_previous === '' || formattedDatePrev.includes(taskColFilters.date_previous);
+
+    const matchesValuePrev = taskColFilters.value_previous === '' || (t.value_previous && (String(t.value_previous).includes(taskColFilters.value_previous) || brl(t.value_previous).includes(taskColFilters.value_previous)));
+    const matchesGap = taskColFilters.gap_justification === '' || (t.gap_justification && t.gap_justification.toLowerCase().includes(taskColFilters.gap_justification.toLowerCase()));
+    
+    const matchesLaunch = taskColFilters.launch_navis === 'all' || t.launch_navis === taskColFilters.launch_navis;
+
+    return matchesEtapa && matchesName && matchesNavis && matchesValue && matchesDate && matchesStatusNf && matchesPagamento && matchesDatePrev && matchesValuePrev && matchesGap && matchesLaunch;
   });
 
-  // Sort tasks chronologically by due_date (ascending), placing tasks without dates at the end
   const sortedTasks = [...filteredTasks].sort((a, b) => {
-    const aDate = a.due_date ? new Date(a.due_date).getTime() : null;
-    const bDate = b.due_date ? new Date(b.due_date).getTime() : null;
+    if (!taskSortConfig) return 0;
+    const { key, direction } = taskSortConfig;
 
-    if (aDate === null && bDate === null) return 0;
-    if (aDate === null) return 1;
-    if (bDate === null) return -1;
+    if (key === 'due_date') {
+      const aTime = a.due_date ? new Date(a.due_date).getTime() : null;
+      const bTime = b.due_date ? new Date(b.due_date).getTime() : null;
+      if (aTime === null && bTime === null) return 0;
+      if (aTime === null) return 1;
+      if (bTime === null) return -1;
+      return direction === 'asc' ? aTime - bTime : bTime - aTime;
+    } else if (key === 'date_previous') {
+      const aTime = a.date_previous ? new Date(a.date_previous).getTime() : null;
+      const bTime = b.date_previous ? new Date(b.date_previous).getTime() : null;
+      if (aTime === null && bTime === null) return 0;
+      if (aTime === null) return 1;
+      if (bTime === null) return -1;
+      return direction === 'asc' ? aTime - bTime : bTime - aTime;
+    }
 
-    return taskDateSortDirection === 'asc' ? aDate - bDate : bDate - aDate;
+    let valA = a[key as keyof Task];
+    let valB = b[key as keyof Task];
+
+    if (typeof valA === 'string') valA = valA.toLowerCase();
+    if (typeof valB === 'string') valB = valB.toLowerCase();
+
+    if (valA == null) return direction === 'asc' ? 1 : -1;
+    if (valB == null) return direction === 'asc' ? -1 : 1;
+
+    if (valA < valB) return direction === 'asc' ? -1 : 1;
+    if (valA > valB) return direction === 'asc' ? 1 : -1;
+    return 0;
   });
 
   const tasksPageCount = Math.max(1, Math.ceil(sortedTasks.length / tasksPageSize));
@@ -422,10 +500,34 @@ export default function Faturamento() {
     return trimmed !== '' && trimmed !== '—' && trimmed !== '-' && trimmed !== 'undefined';
   };
 
+  const getReajusteMonth = (project: Project) => {
+    const dateStr = project.contract_details?.renewalDate;
+    if (!dateStr) return undefined;
+    const months = [
+      'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+      'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+    ];
+    if (dateStr.includes('-')) {
+      const parts = dateStr.split('-');
+      if (parts.length >= 2) {
+        const m = parseInt(parts[1], 10);
+        if (m >= 1 && m <= 12) return months[m - 1];
+      }
+    }
+    if (dateStr.includes('/')) {
+      const parts = dateStr.split('/');
+      if (parts.length >= 2) {
+        const m = parseInt(parts[1], 10);
+        if (m >= 1 && m <= 12) return months[m - 1];
+      }
+    }
+    return dateStr;
+  };
+
   return (
     <Layout
       breadcrumb={[
-        { label: 'Inteligência Artificial | Projetos' },
+        { label: 'Projetos' },
         { label: 'Financeiro' },
         { label: 'Fluxo Financeiro', active: true },
       ]}
@@ -453,56 +555,110 @@ export default function Faturamento() {
       <div className="p-4 grid grid-cols-1 xl:grid-cols-4 gap-4">
         {/* Project Meta Card */}
         <div className="bg-white border border-[var(--border)] rounded-xl p-4 shadow-sm xl:col-span-3">
-          <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 pb-3 border-b border-[var(--border)] gap-4">
-            <div className="flex items-start gap-3">
-              <div className="w-3.5 h-3.5 rounded-full mt-1.5" style={{ backgroundColor: selectedProject.color }} />
-              <div>
-                <h2 className="text-lg font-bold text-[var(--text)]">{selectedProject.name}</h2>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-1 mt-2 text-xs text-[var(--muted)]">
-                  {hasValue(selectedProject.client) && (
-                    <div>Cliente: <span className="font-semibold text-[var(--text2)]">{selectedProject.client}</span></div>
-                  )}
-                  {hasValue(selectedProject.coordenador || selectedProject.responsible) && (
-                    <div>Coordenador: <span className="font-semibold text-[var(--text2)]">{selectedProject.coordenador || selectedProject.responsible}</span></div>
-                  )}
-                  {hasValue(selectedProject.owner) && (
-                    <div>Owner: <span className="font-semibold text-[var(--text2)]">{selectedProject.owner}</span></div>
-                  )}
-                  {hasValue(selectedProject.rotulo_1 || selectedProject.label_code) && (
-                    <div>Rótulo 1: <span className="font-semibold text-[var(--text2)]">{selectedProject.rotulo_1 || selectedProject.label_code}</span></div>
-                  )}
-                  {hasValue(selectedProject.rotulo_2) && (
-                    <div>Rótulo 2: <span className="font-semibold text-[var(--text2)]">{selectedProject.rotulo_2}</span></div>
-                  )}
-                  {hasValue(selectedProject.servico_1) && (
-                    <div>Serviço 1: <span className="font-semibold text-[var(--text2)]">{selectedProject.servico_1}</span></div>
-                  )}
-                  {hasValue(selectedProject.servico_2) && (
-                    <div>Serviço 2: <span className="font-semibold text-[var(--text2)]">{selectedProject.servico_2}</span></div>
+          <div className="mb-4 pb-3 border-b border-[var(--border)]">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-3">
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <div className="w-3.5 h-3.5 rounded-full shrink-0" style={{ backgroundColor: selectedProject.color }} />
+                <div className="min-w-0 flex-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <h2 className="text-lg font-bold text-[var(--text)] truncate" title={selectedProject.name}>
+                    {selectedProject.name}
+                  </h2>
+                  {getReajusteMonth(selectedProject) && (
+                    <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded border border-amber-200 uppercase shrink-0">
+                      Reajuste: {getReajusteMonth(selectedProject)}
+                    </span>
                   )}
                 </div>
               </div>
+              <div className="flex gap-2 self-end md:self-center shrink-0">
+                <select 
+                  value={selectedProjectId} 
+                  onChange={(e) => {
+                    const newId = e.target.value;
+                    setSelectedProjectId(newId);
+                    router.push(`/faturamento?projectId=${newId}`);
+                  }}
+                  className="bg-[var(--surface2)] border border-[var(--border2)] rounded px-3 py-1 text-xs outline-none max-w-[240px] sm:max-w-[320px] md:max-w-[400px] w-full truncate"
+                >
+                  {projects.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+                <button 
+                  onClick={() => setShowReajusteModal(true)}
+                  className="bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs py-1 px-3 rounded transition"
+                >
+                  Aplicar Reajuste
+                </button>
+              </div>
             </div>
-            <div className="flex gap-2 self-end md:self-center">
-              <select 
-                value={selectedProjectId} 
-                onChange={(e) => {
-                  const newId = e.target.value;
-                  setSelectedProjectId(newId);
-                  router.push(`/faturamento?projectId=${newId}`);
-                }}
-                className="bg-[var(--surface2)] border border-[var(--border2)] rounded px-3 py-1 text-xs outline-none"
-              >
-                {projects.map(p => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-              <button 
-                onClick={() => setShowReajusteModal(true)}
-                className="bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs py-1 px-3 rounded transition"
-              >
-                Aplicar Reajuste
-              </button>
+            
+            {/* Metadata Grid spanning full width below the title-dropdown row */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-x-4 gap-y-2 text-xs text-[var(--muted)] pl-[26px]">
+              {hasValue(selectedProject.client) && (
+                <div className="min-w-0">
+                  <span className="text-[var(--muted)]">Cliente:</span>
+                  <div className="font-semibold text-[var(--text2)] truncate" title={selectedProject.client}>
+                    {selectedProject.client}
+                  </div>
+                </div>
+              )}
+              {hasValue(selectedProject.coordenador || selectedProject.responsible) && (
+                <div className="min-w-0">
+                  <span className="text-[var(--muted)]">Coordenador:</span>
+                  <div className="font-semibold text-[var(--text2)] truncate" title={selectedProject.coordenador || selectedProject.responsible}>
+                    {selectedProject.coordenador || selectedProject.responsible}
+                  </div>
+                </div>
+              )}
+              {hasValue(selectedProject.owner) && (
+                <div className="min-w-0">
+                  <span className="text-[var(--muted)]">Owner:</span>
+                  <div className="font-semibold text-[var(--text2)] truncate" title={selectedProject.owner}>
+                    {selectedProject.owner}
+                  </div>
+                </div>
+              )}
+              {getReajusteMonth(selectedProject) && (
+                <div className="min-w-0">
+                  <span className="text-[var(--muted)]">Mês Reajuste:</span>
+                  <div className="font-semibold text-amber-700 truncate" title={getReajusteMonth(selectedProject)}>
+                    {getReajusteMonth(selectedProject)}
+                  </div>
+                </div>
+              )}
+              {hasValue(selectedProject.rotulo_1 || selectedProject.label_code) && (
+                <div className="min-w-0">
+                  <span className="text-[var(--muted)]">Rótulo 1:</span>
+                  <div className="font-semibold text-[var(--text2)] truncate" title={selectedProject.rotulo_1 || selectedProject.label_code}>
+                    {selectedProject.rotulo_1 || selectedProject.label_code}
+                  </div>
+                </div>
+              )}
+              {hasValue(selectedProject.rotulo_2) && (
+                <div className="min-w-0">
+                  <span className="text-[var(--muted)]">Rótulo 2:</span>
+                  <div className="font-semibold text-[var(--text2)] truncate" title={selectedProject.rotulo_2}>
+                    {selectedProject.rotulo_2}
+                  </div>
+                </div>
+              )}
+              {hasValue(selectedProject.servico_1) && (
+                <div className="min-w-0">
+                  <span className="text-[var(--muted)]">Serviço 1:</span>
+                  <div className="font-semibold text-[var(--text2)] truncate" title={selectedProject.servico_1}>
+                    {selectedProject.servico_1}
+                  </div>
+                </div>
+              )}
+              {hasValue(selectedProject.servico_2) && (
+                <div className="min-w-0">
+                  <span className="text-[var(--muted)]">Serviço 2:</span>
+                  <div className="font-semibold text-[var(--text2)] truncate" title={selectedProject.servico_2}>
+                    {selectedProject.servico_2}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -629,6 +785,12 @@ export default function Faturamento() {
               <button onClick={() => handleProjectAction(selectedProject.id, 'faturado')} className="bg-[var(--surface3)] hover:bg-[var(--border2)] text-[10px] font-bold py-1 rounded transition text-center">Faturar</button>
               <button onClick={() => handleProjectAction(selectedProject.id, 'pago')} className="bg-[var(--surface3)] hover:bg-[var(--border2)] text-[10px] font-bold py-1 rounded transition text-center">Confirmar Pg</button>
             </div>
+            <button 
+              onClick={() => handleProjectAction(selectedProject.id, 'navis')} 
+              className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs py-1 rounded transition mt-1"
+            >
+              Atualizar Navis
+            </button>
             {selectedProject.flow_released && (
               <div className="text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-3 py-2">
                 Fluxo liberado em {selectedProject.flow_released_at ? new Date(selectedProject.flow_released_at).toLocaleDateString('pt-BR') : 'data registrada'}.
@@ -639,6 +801,31 @@ export default function Faturamento() {
                 Revisão solicitada em {selectedProject.flow_review_requested_at ? new Date(selectedProject.flow_review_requested_at).toLocaleDateString('pt-BR') : 'data registrada'}.
               </div>
             )}
+            <div className="border-t border-[var(--border)] pt-2 mt-2 text-xs space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-[var(--muted)] text-[10px] uppercase">Status:</span>
+                {latestEvent ? (
+                  <span className="bg-sky-100 text-sky-800 font-bold px-2 py-0.5 rounded text-[10px] uppercase">
+                    {latestEvent.action_type === 'measurements_sent'
+                      ? 'Fluxo Medido'
+                      : latestEvent.action_type === 'navis_updated'
+                      ? 'Atualizado Navis'
+                      : latestEvent.action_type === 'invoices_sent'
+                      ? 'Faturado'
+                      : 'Pago'}
+                  </span>
+                ) : (
+                  <span className="text-[var(--muted)]">—</span>
+                )}
+              </div>
+              {latestEvent && (
+                <div className="text-[10px] text-[var(--muted)] leading-tight text-right mt-1">
+                  Por: <span className="font-medium text-[var(--text2)]">{latestEvent.actor_name}</span>
+                  <br />
+                  em {new Date(latestEvent.created_at).toLocaleString('pt-BR')}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -862,26 +1049,18 @@ export default function Faturamento() {
       {/* View Filters toolbar */}
       <div className="vtoolbar mx-4 mb-4 rounded-lg border border-[var(--border)]">
         <div className="flex gap-1 flex-wrap">
-          {(['all', 'fat', 'vis', 'agu', 'apr', 'critical'] as const).map((f) => (
+          {(['all', 'fat', 'vis', 'agu', 'apr'] as const).map((f) => (
             <button
               key={f}
               className={`fchip${filter === f ? ' active' : ''}`}
               onClick={() => setFilter(f)}
             >
-              {f === 'all' ? 'Todos' : f === 'critical' ? '⚠️ Fluxos Críticos' : `● ${STATUS_LABELS[f] || f}`}
+              {f === 'all' ? 'Todos' : `● ${STATUS_LABELS[f] || f}`}
             </button>
           ))}
         </div>
         <div className="vright">
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="btn btn-secondary inline-flex items-center gap-1 text-[11px] px-2 py-1"
-              onClick={() => setTaskDateSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
-            >
-              <ArrowUpDown size={12} />
-              Ordenar data: {taskDateSortDirection === 'asc' ? 'Cresc.' : 'Desc.'}
-            </button>
             <div className="search-box">
               <Search size={12} className="absolute left-[7px] text-[var(--muted)] pointer-events-none" />
               <input
@@ -906,19 +1085,77 @@ export default function Faturamento() {
                   <th key={column}>{column}</th>
                 ))}
               </tr>
+              {/* Sortable column headers */}
               <tr className="bg-[var(--surface3)] border-b border-[var(--border2)]">
                 <th className="excel-row-header">31</th>
-                <th className="py-2.5 w-28">Etapa</th>
-                <th className="py-2.5 min-w-[380px]">Atividade</th>
-                <th className="py-2.5 text-center w-24">N.º Navis</th>
-                <th className="py-2.5 text-right w-32">Valor</th>
-                <th className="py-2.5 text-center w-36">Data</th>
-                <th className="py-2.5 text-center w-28">Status NF</th>
-                <th className="py-2.5 text-center w-32">Pagamento</th>
-                <th className="py-2.5 text-center w-32">Data Anterior</th>
-                <th className="py-2.5 text-right w-32">Valor Anterior</th>
-                <th className="py-2.5 w-44 text-center">Justificativa GAP</th>
-                <th className="py-2.5 text-center w-28">Lançar Navis</th>
+                {([
+                  { key: 'etapa' as const, label: 'Etapa', cls: 'py-2.5 w-28 text-left' },
+                  { key: 'name' as const, label: 'Atividade', cls: 'py-2.5 min-w-[380px] text-left' },
+                  { key: 'navis_num' as const, label: 'N.º Navis', cls: 'py-2.5 text-center w-24' },
+                  { key: 'value' as const, label: 'Valor', cls: 'py-2.5 text-right w-32' },
+                  { key: 'due_date' as const, label: 'Data', cls: 'py-2.5 text-center w-36' },
+                  { key: 'status_nf' as const, label: 'Status NF', cls: 'py-2.5 text-center w-28' },
+                  { key: 'pagamento' as const, label: 'Pagamento', cls: 'py-2.5 text-center w-32' },
+                  { key: 'date_previous' as const, label: 'Data Anterior', cls: 'py-2.5 text-center w-32' },
+                  { key: 'value_previous' as const, label: 'Valor Anterior', cls: 'py-2.5 text-right w-32' },
+                  { key: 'gap_justification' as const, label: 'Justificativa GAP', cls: 'py-2.5 w-44 text-center' },
+                  { key: 'launch_navis' as const, label: 'Lançar Navis', cls: 'py-2.5 text-center w-28' },
+                ] as { key: keyof Task; label: string; cls: string }[]).map(({ key, label, cls }) => {
+                  const isSorted = taskSortConfig?.key === key;
+                  return (
+                    <th
+                      key={key}
+                      className={`${cls} cursor-pointer hover:bg-[var(--surface2)] select-none transition`}
+                      onClick={() =>
+                        setTaskSortConfig(prev =>
+                          prev && prev.key === key
+                            ? { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' }
+                            : { key, direction: 'asc' }
+                        )
+                      }
+                    >
+                      <span className="inline-flex items-center gap-0.5 justify-inherit">
+                        {label}
+                        <ArrowUpDown size={10} className={`shrink-0 ${isSorted ? 'text-sky-600' : 'text-slate-300'}`} />
+                      </span>
+                    </th>
+                  );
+                })}
+              </tr>
+              {/* Column filter inputs row */}
+              <tr className="bg-[var(--surface2)] border-b border-[var(--border2)]">
+                <th className="py-1 px-1"></th>
+                <th className="py-1 px-1"><input type="text" placeholder="Filtrar…" value={taskColFilters.etapa} onChange={e => setTaskColFilters(p => ({ ...p, etapa: e.target.value }))} className="w-full bg-white border border-[var(--border2)] rounded px-1.5 py-0.5 text-[9px] font-normal outline-none focus:border-sky-400" /></th>
+                <th className="py-1 px-1"><input type="text" placeholder="Filtrar…" value={taskColFilters.name} onChange={e => setTaskColFilters(p => ({ ...p, name: e.target.value }))} className="w-full bg-white border border-[var(--border2)] rounded px-1.5 py-0.5 text-[9px] font-normal outline-none focus:border-sky-400" /></th>
+                <th className="py-1 px-1"><input type="text" placeholder="Filtrar…" value={taskColFilters.navis_num} onChange={e => setTaskColFilters(p => ({ ...p, navis_num: e.target.value }))} className="w-full bg-white border border-[var(--border2)] rounded px-1.5 py-0.5 text-[9px] font-normal outline-none focus:border-sky-400 text-center" /></th>
+                <th className="py-1 px-1"><input type="text" placeholder="Filtrar…" value={taskColFilters.value} onChange={e => setTaskColFilters(p => ({ ...p, value: e.target.value }))} className="w-full bg-white border border-[var(--border2)] rounded px-1.5 py-0.5 text-[9px] font-normal outline-none focus:border-sky-400 text-right" /></th>
+                <th className="py-1 px-1"><input type="text" placeholder="aaaa-mm-dd" value={taskColFilters.due_date} onChange={e => setTaskColFilters(p => ({ ...p, due_date: e.target.value }))} className="w-full bg-white border border-[var(--border2)] rounded px-1.5 py-0.5 text-[9px] font-normal outline-none focus:border-sky-400 text-center" /></th>
+                <th className="py-1 px-1">
+                  <select value={taskColFilters.status_nf} onChange={e => setTaskColFilters(p => ({ ...p, status_nf: e.target.value }))} className="w-full bg-white border border-[var(--border2)] rounded px-1 py-0.5 text-[9px] font-normal outline-none focus:border-sky-400">
+                    <option value="all">Todos</option>
+                    <option value="fat">Faturar</option>
+                    <option value="vis">Visualização</option>
+                    <option value="agu">Aguard. Aprov.</option>
+                    <option value="apr">Aprovado</option>
+                  </select>
+                </th>
+                <th className="py-1 px-1">
+                  <select value={taskColFilters.pagamento} onChange={e => setTaskColFilters(p => ({ ...p, pagamento: e.target.value }))} className="w-full bg-white border border-[var(--border2)] rounded px-1 py-0.5 text-[9px] font-normal outline-none focus:border-sky-400">
+                    <option value="all">Todos</option>
+                    <option value="pendente">Pendente</option>
+                    <option value="pago">Pago</option>
+                  </select>
+                </th>
+                <th className="py-1 px-1"><input type="text" placeholder="aaaa-mm-dd" value={taskColFilters.date_previous} onChange={e => setTaskColFilters(p => ({ ...p, date_previous: e.target.value }))} className="w-full bg-white border border-[var(--border2)] rounded px-1.5 py-0.5 text-[9px] font-normal outline-none focus:border-sky-400 text-center" /></th>
+                <th className="py-1 px-1"><input type="text" placeholder="Filtrar…" value={taskColFilters.value_previous} onChange={e => setTaskColFilters(p => ({ ...p, value_previous: e.target.value }))} className="w-full bg-white border border-[var(--border2)] rounded px-1.5 py-0.5 text-[9px] font-normal outline-none focus:border-sky-400 text-right" /></th>
+                <th className="py-1 px-1"><input type="text" placeholder="Filtrar…" value={taskColFilters.gap_justification} onChange={e => setTaskColFilters(p => ({ ...p, gap_justification: e.target.value }))} className="w-full bg-white border border-[var(--border2)] rounded px-1.5 py-0.5 text-[9px] font-normal outline-none focus:border-sky-400" /></th>
+                <th className="py-1 px-1">
+                  <select value={taskColFilters.launch_navis} onChange={e => setTaskColFilters(p => ({ ...p, launch_navis: e.target.value }))} className="w-full bg-white border border-[var(--border2)] rounded px-1 py-0.5 text-[9px] font-normal outline-none focus:border-sky-400">
+                    <option value="all">Todos</option>
+                    <option value="sim">Sim</option>
+                    <option value="nao">Não</option>
+                  </select>
+                </th>
               </tr>
             </thead>
             <tbody>
