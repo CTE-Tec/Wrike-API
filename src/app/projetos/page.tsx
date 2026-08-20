@@ -92,8 +92,15 @@ export default function ProjetosPage() {
     if (!sortConfig) return 0;
     const { key, direction } = sortConfig;
 
-    let valA: any = '';
-    let valB: any = '';
+    const toPrimitive = (v: unknown): string | number => {
+      if (typeof v === 'number' || typeof v === 'boolean') return Number(v);
+      if (v == null) return '';
+      if (typeof v === 'string') return v.toLowerCase();
+      return '';
+    };
+
+    let valA: string | number;
+    let valB: string | number;
 
     if (key === 'status') {
       valA = a.approved_by_owner ? 1 : 0;
@@ -102,14 +109,9 @@ export default function ProjetosPage() {
       valA = (a.latest_status_event?.actor_name || '').toLowerCase();
       valB = (b.latest_status_event?.actor_name || '').toLowerCase();
     } else {
-      const fieldValA = a[key as keyof Project];
-      const fieldValB = b[key as keyof Project];
-      valA = typeof fieldValA === 'string' ? fieldValA.toLowerCase() : fieldValA;
-      valB = typeof fieldValB === 'string' ? fieldValB.toLowerCase() : fieldValB;
+      valA = toPrimitive(a[key as keyof Project]);
+      valB = toPrimitive(b[key as keyof Project]);
     }
-
-    if (valA == null) return direction === 'asc' ? 1 : -1;
-    if (valB == null) return direction === 'asc' ? -1 : 1;
 
     if (valA < valB) return direction === 'asc' ? -1 : 1;
     if (valA > valB) return direction === 'asc' ? 1 : -1;
